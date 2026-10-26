@@ -1,10 +1,10 @@
 import { SplineSample, TrackSupportTier, Vec3Point } from '../types/diorama';
 import { sampleNaturalTerrainHeight, TRACK_BED_OFFSET } from './noise';
 
-/** Maximum vertical railway grade (rise / run) to avoid overly steep tracks (16%). */
-export const MAX_RAILWAY_GRADE = 0.16;
-export const CAVEAT_FLUSH_THRESHOLD = 0.1;
-export const TRESTLE_THRESHOLD = 0.3;
+/** Maximum vertical rail slope (rise / run) to keep grades gentle (14%). */
+export const MAX_RAILWAY_GRADE = 0.14;
+export const CAVEAT_FLUSH_THRESHOLD = 0.12;
+export const TRESTLE_THRESHOLD = 0.32;
 
 function validatePointArray(points: ReadonlyArray<Vec3Point>): void {
   if (!Array.isArray(points)) {
@@ -17,16 +17,44 @@ function validatePointArray(points: ReadonlyArray<Vec3Point>): void {
   }
 }
 
-function catmullRomScalar(p0: number, p1: number, p2: number, p3: number, t: number): number {
-  const t2 = t * t;
-  const t3 = t2 * t;
-  return (
-    0.5 *
-    (2 * p1 +
-      (-p0 + p2) * t +
-      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
-  );
+/**
+ * Centripetal Catmull-Rom interpolation (alpha = 0.5).
+ * Mathematically avoids cusps, self-intersections, and overshoot kinks.
+ */
+function centripetalCatmullRom(
+  p0: Vec3Point,
+  p1: Vec3Point,
+  p2: Vec3Point,
+  p3: Vec3Point,
+  t: number
+): Vec3Point {
+  const getT = (tPrev: number, pA: Vec3Point, pB: Vec3Point): number => {
+    const d = Math.hypot(pB.x - pA.x, pB.y - pA.y, pB.z - pA.z);
+    return tPrev + Math.pow(Math.max(1e-4, d), 0.5);
+  };
+
+  const t0 = 0;
+  const t1 = getT(t0, p0, p1);
+  const t2 = getT(t1, p1, p2);
+  const t3 = getT(t2, p2, p3);
+
+  const tInterp = t1 + t * (t2 - t1);
+
+  const evalPair = (tA: number, pA: Vec3Point, tB: number, pB: Vec3Point): Vec3Point => {
+    const inv = 1 / (tB - tA);
+    const wA = (tB - tInterp) * inv;
+    const wB = (tInterp - tA) * inv;
+    return { x: pA.x * wA + pB.x * wB, y: pA.y * wA + pB.y * wB, z: pA.z * wA + pB.z * wB };
+  };
+
+  const a1 = evalPair(t0, p0, t1, p1);
+  const a2 = evalPair(t1, p1, t2, p2);
+  const a3 = evalPair(t2, p2, t3, p3);
+
+  const b1 = evalPair(t0, a1, t2, a2);
+  const b2 = evalPair(t1, a2, t3, a3);
+
+  return evalPair(t1, b1, t2, b2);
 }
 
 export function evaluateCatmullRomPoint(
@@ -58,26 +86,24 @@ export function evaluateCatmullRomPoint(
     return points[Math.max(0, Math.min(n - 1, idx))];
   };
 
-  const p0 = getPt(segIdx - 1);
-  const p1 = getPt(segIdx);
-  const p2 = getPt(segIdx + 1);
-  const p3 = getPt(segIdx + 2);
-
-  return {
-    x: catmullRomScalar(p0.x, p1.x, p2.x, p3.x, localT),
-    y: catmullRomScalar(p0.y, p1.y, p2.y, p3.y, localT),
-    z: catmullRomScalar(p0.z, p1.z, p2.z, p3.z, localT),
-  };
+  return centripetalCatmullRom(
+    getPt(segIdx - 1),
+    getPt(segIdx),
+    getPt(segIdx + 1),
+    getPt(segIdx + 2),
+    localT
+  );
 }
 
 /**
- * Enforces smooth railway grades along control points so tracks never dive too steeply.
- * Where the terrain drops steeply below, tracks maintain gentle grades on substructures.
+ * Smooths control point elevations so grades are gentle and the spline never dips
+ * below the natural terrain anywhere along the path.
  */
 export function relaxTrackPointHeights(
   points: ReadonlyArray<Vec3Point>,
   closed: boolean,
-  maxGrade: number
+  maxGrade: number,
+  seed: number
 ): ReadonlyArray<Vec3Point> {
   validatePointArray(points);
   if (typeof closed !== 'boolean') {
@@ -86,61 +112,58 @@ export function relaxTrackPointHeights(
   if (typeof maxGrade !== 'number' || !Number.isFinite(maxGrade) || maxGrade <= 0) {
     throw new RangeError('CRITICAL: maxGrade must be a positive finite number.');
   }
+  if (!Number.isInteger(seed)) {
+    throw new TypeError('CRITICAL: seed must be an integer.');
+  }
 
   if (points.length < 2) {
     return points;
   }
 
   const n = points.length;
-  const heights = points.map((p): number => p.y);
-  const iterations = Math.min(32, n * 2);
+  // Ensure each control point clears the natural ground
+  const heights = points.map((p): number => {
+    const ground = sampleNaturalTerrainHeight(p.x, p.z, seed);
+    return Math.max(p.y, ground + TRACK_BED_OFFSET);
+  });
 
-  // Multi-pass relaxation ensuring |y[i] - y[j]| <= maxGrade * dist(i, j)
-  for (let iter = 0; iter < iterations; iter += 1) {
+  // Intermediate segment terrain sampling to prevent sagging into hills
+  const segCount = closed ? n : n - 1;
+  for (let i = 0; i < segCount; i += 1) {
+    const nextIdx = (i + 1) % n;
+    const pA = points[i];
+    const pB = points[nextIdx];
+    for (let step = 1; step <= 3; step += 1) {
+      const f = step / 4;
+      const mx = pA.x + (pB.x - pA.x) * f;
+      const mz = pA.z + (pB.z - pA.z) * f;
+      const ground = sampleNaturalTerrainHeight(mx, mz, seed) + TRACK_BED_OFFSET;
+      const nominalY = heights[i] + (heights[nextIdx] - heights[i]) * f;
+      if (nominalY < ground) {
+        const deficit = ground - nominalY;
+        heights[i] += deficit * (1 - f);
+        heights[nextIdx] += deficit * f;
+      }
+    }
+  }
+
+  // Relaxation passes ensuring |h[i] - h[j]| <= maxGrade * dist
+  for (let iter = 0; iter < 16; iter += 1) {
     let changed = false;
-    const passes: ReadonlyArray<readonly [number, number, number]> = [
-      [0, n - 1, 1],
-      [n - 1, 0, -1],
-    ];
+    for (let i = 0; i < segCount; i += 1) {
+      const j = (i + 1) % n;
+      const dist = Math.max(0.1, Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z));
+      const maxDelta = dist * maxGrade;
 
-    for (const [start, end, dir] of passes) {
-      for (let i = start; dir > 0 ? i < end : i > end; i += dir) {
-        const nextIdx = i + dir;
-        const pA = points[i];
-        const pB = points[nextIdx];
-        const dist = Math.hypot(pA.x - pB.x, pA.z - pB.z);
-        const maxDelta = dist * maxGrade;
-
-        if (heights[nextIdx] < heights[i] - maxDelta) {
-          heights[nextIdx] = heights[i] - maxDelta;
-          changed = true;
-        }
-      }
-
-      if (closed) {
-        const pLast = points[n - 1];
-        const pFirst = points[0];
-        const loopDist = Math.hypot(pLast.x - pFirst.x, pLast.z - pFirst.z);
-        const maxLoopDelta = loopDist * maxGrade;
-        if (heights[0] < heights[n - 1] - maxLoopDelta) {
-          heights[0] = heights[n - 1] - maxLoopDelta;
-          changed = true;
-        }
-        if (heights[n - 1] < heights[0] - maxLoopDelta) {
-          heights[n - 1] = heights[0] - maxLoopDelta;
-          changed = true;
-        }
-      }
+      if (heights[i] < heights[j] - maxDelta) { heights[i] = heights[j] - maxDelta; changed = true; }
+      if (heights[j] < heights[i] - maxDelta) { heights[j] = heights[i] - maxDelta; changed = true; }
     }
-
-    if (!changed) {
-      break;
-    }
+    if (!changed) break;
   }
 
   return points.map((p, idx): Vec3Point => ({
     x: p.x,
-    y: Math.max(p.y, heights[idx]),
+    y: heights[idx],
     z: p.z,
   }));
 }
@@ -175,11 +198,10 @@ export function buildSplineSamples(
     return [];
   }
 
-  // Smooth control point elevations to avoid unrealistically steep drops
-  const gradedPoints = relaxTrackPointHeights(controlPoints, closed, MAX_RAILWAY_GRADE);
+  const gradedPoints = relaxTrackPointHeights(controlPoints, closed, MAX_RAILWAY_GRADE, seed);
 
-  // Resample along uniform arc length
-  const denseCount = sampleResolution * 3;
+  // Resample along uniform arc length using centripetal interpolation
+  const denseCount = sampleResolution * 4;
   const rawPts: Vec3Point[] = [];
   const cumLen: number[] = [0];
 
@@ -243,11 +265,11 @@ export function buildSplineSamples(
     const nz = tx / horizLen;
 
     const yawRadians = Math.atan2(tx, tz);
-    const pitchRadians = Math.asin(Math.max(-0.4, Math.min(0.4, ty)));
+    const pitchRadians = Math.asin(Math.max(-0.35, Math.min(0.35, ty)));
 
     const terrainY = sampleNaturalTerrainHeight(curr.x, curr.z, seed);
-    // Track elevation is at least TRACK_BED_OFFSET above natural terrain
-    const trackY = Math.max(terrainY + TRACK_BED_OFFSET, curr.y);
+    // Smooth spline elevation without point-by-point step clamping
+    const trackY = curr.y;
     const clearance = Math.max(0, trackY - terrainY);
     const supportTier = classifySupportTier(clearance);
     const isBridge = supportTier !== 'flush';
@@ -308,7 +330,7 @@ export function sampleTrainPoseAlongSpline(
     normalX: a.normalX + (b.normalX - a.normalX) * t,
     normalZ: a.normalZ + (b.normalZ - a.normalZ) * t,
     yawRadians: Math.atan2(tx, tz),
-    pitchRadians: Math.asin(Math.max(-0.4, Math.min(0.4, ty))),
+    pitchRadians: Math.asin(Math.max(-0.35, Math.min(0.35, ty))),
     isBridge: a.isBridge,
     terrainY: a.terrainY + (b.terrainY - a.terrainY) * t,
     clearance: a.clearance + (b.clearance - a.clearance) * t,

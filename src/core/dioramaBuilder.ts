@@ -111,12 +111,13 @@ export function createOrganicDiorama(
 
   const trackPoints: Vec3Point[] = [];
   if (withStarterTrack) {
-    // Sweeping kidney loop that crosses the wash and cuts through mesa flanks
-    const nodes = 12;
+    // Wide, graceful model railroad loop with gentle curves
+    const nodes = 16;
     for (let i = 0; i < nodes; i += 1) {
       const theta = (i / nodes) * Math.PI * 2;
-      const wx = Math.cos(theta) * (5.1 + Math.sin(theta * 2) * 0.75);
-      const wz = Math.sin(theta) * (4.4 + Math.cos(theta * 3) * 0.65);
+      const r = 4.6 + Math.cos(2 * theta) * 0.45;
+      const wx = Math.sin(theta) * (r + 0.35);
+      const wz = Math.cos(theta) * (r - 0.35);
       trackPoints.push({ x: wx, y: computeTrackPointY(wx, wz, seed), z: wz });
     }
   }
@@ -141,30 +142,59 @@ function applyTrackTool(world: OrganicDioramaWorld, worldX: number, worldZ: numb
   let nextClosed = world.trackClosed;
 
   if (nextClosed) {
-    // Insert into the nearest segment of the loop to reshape it organically
-    if (nextPoints.some((p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) < 0.75)) {
+    if (nextPoints.some((p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) < 0.85)) {
       return world;
     }
-    let bestIdx = nextPoints.length;
+    let bestIdx = -1;
     let bestDist = Number.POSITIVE_INFINITY;
     for (let i = 0; i < nextPoints.length; i += 1) {
       const a = nextPoints[i];
       const b = nextPoints[(i + 1) % nextPoints.length];
-      const d = Math.hypot(worldX - (a.x + b.x) * 0.5, worldZ - (a.z + b.z) * 0.5);
-      if (d < bestDist) {
-        bestDist = d;
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq < 0.25) continue;
+      const t = Math.max(0.15, Math.min(0.85, ((worldX - a.x) * dx + (worldZ - a.z) * dz) / lenSq));
+      const projX = a.x + dx * t;
+      const projZ = a.z + dz * t;
+      const dist = Math.hypot(worldX - projX, worldZ - projZ);
+      if (dist < bestDist) {
+        bestDist = dist;
         bestIdx = i + 1;
       }
     }
-    nextPoints.splice(bestIdx, 0, newPt);
+    if (bestIdx >= 0) {
+      const prev = nextPoints[(bestIdx - 1 + nextPoints.length) % nextPoints.length];
+      const next = nextPoints[bestIdx % nextPoints.length];
+      const v1x = newPt.x - prev.x;
+      const v1z = newPt.z - prev.z;
+      const v2x = next.x - newPt.x;
+      const v2z = next.z - newPt.z;
+      const dot = (v1x * v2x + v1z * v2z) / (Math.hypot(v1x, v1z) * Math.hypot(v2x, v2z));
+      if (dot < 0.15) {
+        return world; // Prevent acute hairpin kinks
+      }
+      nextPoints.splice(bestIdx, 0, newPt);
+    }
   } else if (nextPoints.length > 0) {
     const last = nextPoints[nextPoints.length - 1];
     if (Math.hypot(last.x - worldX, last.z - worldZ) < 0.85) {
       return world;
     }
+    if (nextPoints.length >= 2) {
+      const prev = nextPoints[nextPoints.length - 2];
+      const v1x = last.x - prev.x;
+      const v1z = last.z - prev.z;
+      const v2x = newPt.x - last.x;
+      const v2z = newPt.z - last.z;
+      const dot = (v1x * v2x + v1z * v2z) / (Math.hypot(v1x, v1z) * Math.hypot(v2x, v2z));
+      if (dot < -0.2) {
+        return world; // Prevent sharp backwards turn
+      }
+    }
     const first = nextPoints[0];
     if (nextPoints.length >= 4 && Math.hypot(first.x - worldX, first.z - worldZ) < 1.35) {
-      nextClosed = true; // auto-close the loop near its start
+      nextClosed = true; // auto-close loop near start
     } else {
       nextPoints.push(newPt);
     }

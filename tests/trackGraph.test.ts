@@ -36,7 +36,7 @@ describe('Catmull-Rom spline evaluation & train pose interpolation', (): void =>
       { x: 0, y: 1.5, z: 0 },
       { x: 1, y: 0.5, z: 0 },
     ];
-    const relaxed = relaxTrackPointHeights(steepDrop, false, 0.16);
+    const relaxed = relaxTrackPointHeights(steepDrop, false, 0.16, 4208);
     // Point 1 should be held up by substructures so slope does not exceed 0.16
     expect(relaxed[1].y).toBeGreaterThanOrEqual(1.5 - 0.16 * 1.0 - 1e-4);
 
@@ -51,9 +51,9 @@ describe('Catmull-Rom spline evaluation & train pose interpolation', (): void =>
     );
     expect((): Vec3Point => evaluateCatmullRomPoint(DEMO_POINTS, false, 1.5)).toThrow(RangeError);
     expect((): Vec3Point => evaluateCatmullRomPoint(DEMO_POINTS, false, -0.1)).toThrow(RangeError);
-    expect((): ReadonlyArray<Vec3Point> => relaxTrackPointHeights(DEMO_POINTS, false, -0.05)).toThrow(
-      RangeError
-    );
+    expect((): ReadonlyArray<Vec3Point> =>
+      relaxTrackPointHeights(DEMO_POINTS, false, -0.05, 4208)
+    ).toThrow(RangeError);
   });
 
   it('throws RangeError or TypeError on invalid sample resolution, clearance, or empty sample interpolation (Failure Path 2)', (): void => {
