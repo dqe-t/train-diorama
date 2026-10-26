@@ -1,5 +1,5 @@
 import { NaturalProp, PlacedStructure, PropKind, SplineSample } from '../types/diorama';
-import { hashCoords, PLAIN_Y, sampleTerraformedHeight, sampleWashFactor } from './noise';
+import { hashCoords, PLAIN_Y, sampleNaturalTerrainHeight, sampleWashFactor } from './noise';
 
 const TRACK_CLEARANCE = 0.72;
 const STRUCTURE_CLEARANCE = 0.85;
@@ -49,19 +49,18 @@ function isNearStructure(
 export function estimateSlope(
   x: number,
   z: number,
-  seed: number,
-  samples: ReadonlyArray<SplineSample>
+  seed: number
 ): number {
   validateFinite(x, 'x');
   validateFinite(z, 'z');
   const e = 0.12;
   const dx =
-    (sampleTerraformedHeight(x + e, z, seed, samples) -
-      sampleTerraformedHeight(x - e, z, seed, samples)) /
+    (sampleNaturalTerrainHeight(x + e, z, seed) -
+      sampleNaturalTerrainHeight(x - e, z, seed)) /
     (2 * e);
   const dz =
-    (sampleTerraformedHeight(x, z + e, seed, samples) -
-      sampleTerraformedHeight(x, z - e, seed, samples)) /
+    (sampleNaturalTerrainHeight(x, z + e, seed) -
+      sampleNaturalTerrainHeight(x, z - e, seed)) /
     (2 * e);
   return Math.hypot(dx, dz);
 }
@@ -117,7 +116,7 @@ export function isBuildableSite(
   if (sampleWashFactor(x, z, seed) > 0.3) {
     return false;
   }
-  return estimateSlope(x, z, seed, samples) < 0.6;
+  return estimateSlope(x, z, seed) < 0.6;
 }
 
 function placeLandmarkArches(
@@ -148,11 +147,11 @@ function placeLandmarkArches(
     ];
     const footOk = feet.every(
       ([px, pz]): boolean =>
-        sampleWashFactor(px, pz, seed) < 0.05 && estimateSlope(px, pz, seed, samples) < 0.35
+        sampleWashFactor(px, pz, seed) < 0.05 && estimateSlope(px, pz, seed) < 0.35
     );
-    if (!footOk || estimateSlope(x, z, seed, samples) > 0.3) continue;
+    if (!footOk || estimateSlope(x, z, seed) > 0.3) continue;
 
-    const y = Math.min(...feet.map(([px, pz]): number => sampleTerraformedHeight(px, pz, seed, samples)));
+    const y = Math.min(...feet.map(([px, pz]): number => sampleNaturalTerrainHeight(px, pz, seed)));
     arches.push({
       id: `arch-${attempt}`,
       kind: 'arch',
@@ -198,8 +197,8 @@ export function scatterDesertProps(
       if (isNearStructure(x, z, structures, STRUCTURE_CLEARANCE)) continue;
       if (arches.some((a): boolean => Math.hypot(a.x - x, a.z - z) < 1.0 * a.scale)) continue;
 
-      const y = sampleTerraformedHeight(x, z, seed, samples);
-      const slope = estimateSlope(x, z, seed, samples);
+      const y = sampleNaturalTerrainHeight(x, z, seed);
+      const slope = estimateSlope(x, z, seed);
       const wash = sampleWashFactor(x, z, seed);
       const kind = pickDesertPropKind(y, slope, wash, hashCoords(gx, gz, seed + 709));
       if (kind === null) continue;

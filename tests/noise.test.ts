@@ -25,6 +25,8 @@ function makeSample(x: number, y: number, z: number): SplineSample {
     pitchRadians: 0,
     isBridge: false,
     terrainY: y,
+    clearance: 0,
+    supportTier: 'flush',
   };
 }
 
@@ -57,27 +59,15 @@ describe('desert terrain: mesas, dry wash, flat basin & terraforming', (): void 
     expect(Number.isFinite(sampleMesaMask(0, 0, 4208))).toBe(true);
   });
 
-  it('carves cuttings down to grade and fades out deep fills so trestles can span them (Happy Path)', (): void => {
-    // Find a high mesa point and a wash point
-    let mesa: readonly [number, number] | null = null;
-    let wash: readonly [number, number] | null = null;
-    for (let x = -7.5; x <= 7.5 && (mesa === null || wash === null); x += 0.25) {
-      for (let z = -7.5; z <= 7.5; z += 0.25) {
-        const h = sampleNaturalTerrainHeight(x, z, 4208);
-        if (mesa === null && h > PLAIN_Y + 0.9) mesa = [x, z];
-        if (wash === null && sampleWashFactor(x, z, 4208) > 0.99) wash = [x, z];
-      }
-    }
-    expect(mesa).not.toBeNull();
-    expect(wash).not.toBeNull();
-    if (mesa === null || wash === null) return;
+  it('preserves natural terrain geometry completely without track corridor flattening (Happy Path)', (): void => {
+    // Terrain is untouched by tracks
+    const naturalMesa = sampleNaturalTerrainHeight(2.0, 3.0, 4208);
+    const untouchedMesa = sampleTerraformedHeight(2.0, 3.0, 4208, [makeSample(2.0, 0.6, 3.0)]);
+    expect(untouchedMesa).toBe(naturalMesa);
 
-    const cut = sampleTerraformedHeight(mesa[0], mesa[1], 4208, [makeSample(mesa[0], 0.6, mesa[1])]);
-    expect(cut).toBeCloseTo(0.57, 2);
-
-    const natural = sampleNaturalTerrainHeight(wash[0], wash[1], 4208);
-    const bridged = sampleTerraformedHeight(wash[0], wash[1], 4208, [makeSample(wash[0], 0.6, wash[1])]);
-    expect(bridged).toBeCloseTo(natural, 5);
+    const naturalWash = sampleNaturalTerrainHeight(0.0, 0.0, 4208);
+    const untouchedWash = sampleTerraformedHeight(0.0, 0.0, 4208, [makeSample(0.0, 0.6, 0.0)]);
+    expect(untouchedWash).toBe(naturalWash);
   });
 
   it('throws TypeError for non-finite coordinates or non-array spline samples (Failure Path 1)', (): void => {

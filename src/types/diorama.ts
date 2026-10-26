@@ -4,6 +4,8 @@ export type PropKind = 'saguaro' | 'sagebrush' | 'juniper' | 'boulder' | 'hoodoo
 
 export type StructureKind = 'cottage' | 'station' | 'planted_trees';
 
+export type TrackSupportTier = 'flush' | 'cribbing' | 'trestle';
+
 export interface Vec3Point {
   readonly x: number;
   readonly y: number;
@@ -23,6 +25,8 @@ export interface SplineSample {
   readonly pitchRadians: number;
   readonly isBridge: boolean;
   readonly terrainY: number;
+  readonly clearance: number;
+  readonly supportTier: TrackSupportTier;
 }
 
 export interface NaturalProp {

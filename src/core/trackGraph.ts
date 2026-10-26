@@ -1,20 +1,17 @@
-import { SplineSample, Vec3Point } from '../types/diorama';
-import { MIN_TRACK_Y, sampleNaturalTerrainHeight } from './noise';
+import { SplineSample, TrackSupportTier, Vec3Point } from '../types/diorama';
+import { sampleNaturalTerrainHeight, TRACK_BED_OFFSET } from './noise';
 
-/** Rail elevation above natural ground beyond which a timber trestle is built. */
-const BRIDGE_CLEARANCE = 0.22;
+/** Maximum vertical railway grade (rise / run) to avoid overly steep tracks (16%). */
+export const MAX_RAILWAY_GRADE = 0.16;
+export const CAVEAT_FLUSH_THRESHOLD = 0.1;
+export const TRESTLE_THRESHOLD = 0.3;
 
 function validatePointArray(points: ReadonlyArray<Vec3Point>): void {
   if (!Array.isArray(points)) {
     throw new TypeError('CRITICAL: points must be an array of Vec3Point.');
   }
   for (const p of points) {
-    if (
-      !p ||
-      !Number.isFinite(p.x) ||
-      !Number.isFinite(p.y) ||
-      !Number.isFinite(p.z)
-    ) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) {
       throw new TypeError('CRITICAL: Every Vec3Point must contain finite x, y, z coordinates.');
     }
   }
@@ -73,6 +70,90 @@ export function evaluateCatmullRomPoint(
   };
 }
 
+/**
+ * Enforces smooth railway grades along control points so tracks never dive too steeply.
+ * Where the terrain drops steeply below, tracks maintain gentle grades on substructures.
+ */
+export function relaxTrackPointHeights(
+  points: ReadonlyArray<Vec3Point>,
+  closed: boolean,
+  maxGrade: number
+): ReadonlyArray<Vec3Point> {
+  validatePointArray(points);
+  if (typeof closed !== 'boolean') {
+    throw new TypeError('CRITICAL: closed must be a boolean.');
+  }
+  if (typeof maxGrade !== 'number' || !Number.isFinite(maxGrade) || maxGrade <= 0) {
+    throw new RangeError('CRITICAL: maxGrade must be a positive finite number.');
+  }
+
+  if (points.length < 2) {
+    return points;
+  }
+
+  const n = points.length;
+  const heights = points.map((p): number => p.y);
+  const iterations = Math.min(32, n * 2);
+
+  // Multi-pass relaxation ensuring |y[i] - y[j]| <= maxGrade * dist(i, j)
+  for (let iter = 0; iter < iterations; iter += 1) {
+    let changed = false;
+    const passes: ReadonlyArray<readonly [number, number, number]> = [
+      [0, n - 1, 1],
+      [n - 1, 0, -1],
+    ];
+
+    for (const [start, end, dir] of passes) {
+      for (let i = start; dir > 0 ? i < end : i > end; i += dir) {
+        const nextIdx = i + dir;
+        const pA = points[i];
+        const pB = points[nextIdx];
+        const dist = Math.hypot(pA.x - pB.x, pA.z - pB.z);
+        const maxDelta = dist * maxGrade;
+
+        if (heights[nextIdx] < heights[i] - maxDelta) {
+          heights[nextIdx] = heights[i] - maxDelta;
+          changed = true;
+        }
+      }
+
+      if (closed) {
+        const pLast = points[n - 1];
+        const pFirst = points[0];
+        const loopDist = Math.hypot(pLast.x - pFirst.x, pLast.z - pFirst.z);
+        const maxLoopDelta = loopDist * maxGrade;
+        if (heights[0] < heights[n - 1] - maxLoopDelta) {
+          heights[0] = heights[n - 1] - maxLoopDelta;
+          changed = true;
+        }
+        if (heights[n - 1] < heights[0] - maxLoopDelta) {
+          heights[n - 1] = heights[0] - maxLoopDelta;
+          changed = true;
+        }
+      }
+    }
+
+    if (!changed) {
+      break;
+    }
+  }
+
+  return points.map((p, idx): Vec3Point => ({
+    x: p.x,
+    y: Math.max(p.y, heights[idx]),
+    z: p.z,
+  }));
+}
+
+export function classifySupportTier(clearance: number): TrackSupportTier {
+  if (typeof clearance !== 'number' || !Number.isFinite(clearance)) {
+    throw new TypeError('CRITICAL: clearance must be a finite number.');
+  }
+  if (clearance <= CAVEAT_FLUSH_THRESHOLD) return 'flush';
+  if (clearance <= TRESTLE_THRESHOLD) return 'cribbing';
+  return 'trestle';
+}
+
 export function buildSplineSamples(
   controlPoints: ReadonlyArray<Vec3Point>,
   closed: boolean,
@@ -94,14 +175,17 @@ export function buildSplineSamples(
     return [];
   }
 
-  // First pass: oversample and re-parameterize by uniform arc length
+  // Smooth control point elevations to avoid unrealistically steep drops
+  const gradedPoints = relaxTrackPointHeights(controlPoints, closed, MAX_RAILWAY_GRADE);
+
+  // Resample along uniform arc length
   const denseCount = sampleResolution * 3;
   const rawPts: Vec3Point[] = [];
   const cumLen: number[] = [0];
 
   for (let i = 0; i <= denseCount; i += 1) {
     const u = i / denseCount;
-    const pt = evaluateCatmullRomPoint(controlPoints, closed, u);
+    const pt = evaluateCatmullRomPoint(gradedPoints, closed, u);
     rawPts.push(pt);
     if (i > 0) {
       const prev = rawPts[i - 1];
@@ -159,11 +243,14 @@ export function buildSplineSamples(
     const nz = tx / horizLen;
 
     const yawRadians = Math.atan2(tx, tz);
-    const pitchRadians = Math.asin(Math.max(-0.5, Math.min(0.5, ty)));
+    const pitchRadians = Math.asin(Math.max(-0.4, Math.min(0.4, ty)));
 
     const terrainY = sampleNaturalTerrainHeight(curr.x, curr.z, seed);
-    const trackY = Math.max(MIN_TRACK_Y, curr.y);
-    const isBridge = trackY - terrainY > BRIDGE_CLEARANCE;
+    // Track elevation is at least TRACK_BED_OFFSET above natural terrain
+    const trackY = Math.max(terrainY + TRACK_BED_OFFSET, curr.y);
+    const clearance = Math.max(0, trackY - terrainY);
+    const supportTier = classifySupportTier(clearance);
+    const isBridge = supportTier !== 'flush';
 
     samples.push({
       x: curr.x,
@@ -178,6 +265,8 @@ export function buildSplineSamples(
       pitchRadians,
       isBridge,
       terrainY,
+      clearance,
+      supportTier,
     });
   }
 
@@ -219,8 +308,10 @@ export function sampleTrainPoseAlongSpline(
     normalX: a.normalX + (b.normalX - a.normalX) * t,
     normalZ: a.normalZ + (b.normalZ - a.normalZ) * t,
     yawRadians: Math.atan2(tx, tz),
-    pitchRadians: Math.asin(Math.max(-0.5, Math.min(0.5, ty))),
+    pitchRadians: Math.asin(Math.max(-0.4, Math.min(0.4, ty))),
     isBridge: a.isBridge,
     terrainY: a.terrainY + (b.terrainY - a.terrainY) * t,
+    clearance: a.clearance + (b.clearance - a.clearance) * t,
+    supportTier: a.supportTier,
   };
 }

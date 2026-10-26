@@ -13,13 +13,17 @@ import { SplineSample } from '../types/diorama';
 const RAIL_GAUGE = 0.24;
 const BALLAST_TOP_HALF = 0.23;
 const BALLAST_BOT_HALF = 0.36;
+const TRESTLE_WOOD = '#7a5233';
+const TRESTLE_WOOD_DARK = '#5b3a26';
+const STONE_FOOTING = '#7d6b5b';
 
 interface ContinuousTrackMeshes {
   readonly ballastGeo: BufferGeometry;
   readonly leftRailGeo: BufferGeometry;
   readonly rightRailGeo: BufferGeometry;
   readonly sleeperSamples: ReadonlyArray<SplineSample>;
-  readonly viaductPiers: ReadonlyArray<SplineSample>;
+  readonly trestleBents: ReadonlyArray<SplineSample>;
+  readonly cribbingPiers: ReadonlyArray<SplineSample>;
 }
 
 function buildContinuousTrackMeshes(
@@ -30,7 +34,7 @@ function buildContinuousTrackMeshes(
     return null;
   }
 
-  // 1. Build Continuous Extruded Left & Right Steel Rails using CatmullRomCurve3 + TubeGeometry
+  // 1. Continuous Extruded Left & Right Steel Rails
   const leftPts: Vector3[] = [];
   const rightPts: Vector3[] = [];
   const loopCount = closed ? samples.length - 1 : samples.length;
@@ -48,7 +52,7 @@ function buildContinuousTrackMeshes(
   const leftRailGeo = new TubeGeometry(leftCurve, tubularSegments, 0.018, 6, closed);
   const rightRailGeo = new TubeGeometry(rightCurve, tubularSegments, 0.018, 6, closed);
 
-  // 2. Build Continuous Contoured Gravel Ballast Ribbon Geometry
+  // 2. Continuous Contoured Gravel Ballast Ribbon
   const ringVerts = 4;
   const positions = new Float32Array(samples.length * ringVerts * 3);
   let ptr = 0;
@@ -87,14 +91,20 @@ function buildContinuousTrackMeshes(
   ballastGeo.setIndex(indices);
   ballastGeo.computeVertexNormals();
 
-  // 3. Extract evenly spaced sleepers and timber trestle bents
+  // 3. Classify sleepers, low-fill timber cribbing, and high-span trestle bents
   const sleeperSamples: SplineSample[] = [];
-  const viaductPiers: SplineSample[] = [];
+  const trestleBents: SplineSample[] = [];
+  const cribbingPiers: SplineSample[] = [];
 
   for (let i = 0; i < loopCount; i += 1) {
-    sleeperSamples.push(samples[i]);
-    if (samples[i].isBridge && i % 2 === 0) {
-      viaductPiers.push(samples[i]);
+    const s = samples[i];
+    sleeperSamples.push(s);
+    if (i % 2 === 0) {
+      if (s.supportTier === 'trestle') {
+        trestleBents.push(s);
+      } else if (s.supportTier === 'cribbing') {
+        cribbingPiers.push(s);
+      }
     }
   }
 
@@ -103,50 +113,89 @@ function buildContinuousTrackMeshes(
     leftRailGeo,
     rightRailGeo,
     sleeperSamples,
-    viaductPiers,
+    trestleBents,
+    cribbingPiers,
   };
 }
 
-const TRESTLE_WOOD = '#7a5233';
-const TRESTLE_WOOD_DARK = '#5e3f27';
-
-/** Battered timber trestle bent: splayed outer posts, a center post, cap beam and girts. */
-function TrestleBent({ sample }: { readonly sample: SplineSample }): React.JSX.Element {
-  const bottomY = sample.terrainY - 0.06;
-  const topY = sample.y - 0.07;
-  const height = Math.max(0.12, topY - bottomY);
+/** Low-to-moderate fill: stacked timber cribbing retaining wall supporting the track grade. */
+function TimberCribbingPier({ sample }: { readonly sample: SplineSample }): React.JSX.Element {
+  const bottomY = sample.terrainY - 0.01;
+  const topY = sample.y - 0.032;
+  const height = Math.max(0.06, topY - bottomY);
   const midY = bottomY + height * 0.5;
-  const spread = height * 0.14;
+
+  return (
+    <group position={[sample.x, midY, sample.z]} rotation={[0, sample.yawRadians, 0]}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[0.54, height, 0.22]} />
+        <meshStandardMaterial color="#6e4d34" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, height * 0.5, 0]} castShadow>
+        <boxGeometry args={[0.58, 0.025, 0.24]} />
+        <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
+      </mesh>
+    </group>
+  );
+}
+
+/** High span: multi-tier battered timber trestle bent with stone footings. */
+function TrestleBent({ sample }: { readonly sample: SplineSample }): React.JSX.Element {
+  const bottomY = sample.terrainY - 0.02;
+  const topY = sample.y - 0.07;
+  const height = Math.max(0.14, topY - bottomY);
+  const midY = bottomY + height * 0.5;
+  const spread = height * 0.16;
   const lean = Math.atan2(spread, height);
-  const girtCount = Math.floor(height / 0.32);
+  const girtCount = Math.floor(height / 0.3);
 
   return (
     <group position={[sample.x, 0, sample.z]} rotation={[0, sample.yawRadians, 0]}>
+      {/* Stone footings on natural ground */}
       {[-1, 1].map((side): React.JSX.Element => (
         <mesh
-          key={side}
+          key={`foot-${side}`}
+          position={[side * (0.17 + spread), bottomY + 0.03, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[0.1, 0.06, 0.1]} />
+          <meshStandardMaterial color={STONE_FOOTING} roughness={0.92} />
+        </mesh>
+      ))}
+
+      {/* Splayed outer batter posts */}
+      {[-1, 1].map((side): React.JSX.Element => (
+        <mesh
+          key={`post-${side}`}
           position={[side * (0.17 + spread * 0.5), midY, 0]}
           rotation={[0, 0, side * lean]}
           castShadow
         >
-          <boxGeometry args={[0.035, height, 0.035]} />
+          <boxGeometry args={[0.038, height, 0.038]} />
           <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.92} />
         </mesh>
       ))}
+
+      {/* Center plumb post */}
       <mesh position={[0, midY, 0]} castShadow>
-        <boxGeometry args={[0.035, height, 0.035]} />
+        <boxGeometry args={[0.038, height, 0.038]} />
         <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.92} />
       </mesh>
+
+      {/* Top cap beam */}
       <mesh position={[0, topY, 0]} castShadow>
-        <boxGeometry args={[0.5, 0.04, 0.06]} />
+        <boxGeometry args={[0.52, 0.045, 0.07]} />
         <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
       </mesh>
+
+      {/* Horizontal girt braces */}
       {Array.from({ length: girtCount }).map((_, idx): React.JSX.Element => {
-        const gy = topY - (idx + 1) * 0.32;
-        const width = 0.36 + ((topY - gy) / height) * spread * 2;
+        const gy = topY - (idx + 1) * 0.3;
+        const width = 0.38 + ((topY - gy) / height) * spread * 2;
         return (
           <mesh key={idx} position={[0, gy, 0]} castShadow>
-            <boxGeometry args={[width, 0.025, 0.03]} />
+            <boxGeometry args={[width, 0.026, 0.032]} />
             <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
           </mesh>
         );
@@ -166,7 +215,7 @@ export function DioramaTracks(): React.JSX.Element | null {
 
   return (
     <group>
-      {/* Subtle Control Node Markers when in Track Mode */}
+      {/* Control node markers when editing */}
       {world.trackPoints.map((pt, idx): React.JSX.Element => (
         <mesh key={`node-${idx}`} position={[pt.x, pt.y + 0.06, pt.z]}>
           <sphereGeometry args={[0.045, 8, 8]} />
@@ -176,7 +225,7 @@ export function DioramaTracks(): React.JSX.Element | null {
 
       {trackData !== null && (
         <>
-          {/* Continuous Gravel Ballast Bed */}
+          {/* Continuous Gravel Ballast Bed conforming to 3D track path */}
           <mesh geometry={trackData.ballastGeo} receiveShadow castShadow>
             <meshStandardMaterial color="#a3826a" roughness={0.95} side={DoubleSide} />
           </mesh>
@@ -189,7 +238,7 @@ export function DioramaTracks(): React.JSX.Element | null {
             <meshStandardMaterial color="#555d66" metalness={0.6} roughness={0.35} />
           </mesh>
 
-          {/* Tangent-Aligned Wooden Sleepers & Bridge Parapets */}
+          {/* Tangent-aligned wooden ties & bridge guardrails */}
           {trackData.sleeperSamples.map((s, idx): React.JSX.Element => (
             <group
               key={`tie-${idx}`}
@@ -201,7 +250,7 @@ export function DioramaTracks(): React.JSX.Element | null {
                 <meshStandardMaterial color="#66442b" roughness={0.9} />
               </mesh>
 
-              {/* Timber deck stringers & walkway over trestles */}
+              {/* Timber deck walkway & guardrails over elevated spans */}
               {s.isBridge && (
                 <>
                   <mesh position={[0, -0.035, 0]} castShadow receiveShadow>
@@ -221,8 +270,13 @@ export function DioramaTracks(): React.JSX.Element | null {
             </group>
           ))}
 
-          {/* Timber trestle bents spanning the dry wash */}
-          {trackData.viaductPiers.map((pier, idx): React.JSX.Element => (
+          {/* Substructures for moderate fills: stacked timber cribbing piers */}
+          {trackData.cribbingPiers.map((pier, idx): React.JSX.Element => (
+            <TimberCribbingPier key={`crib-${idx}`} sample={pier} />
+          ))}
+
+          {/* Substructures for high spans & wash crossings: timber trestle bents */}
+          {trackData.trestleBents.map((pier, idx): React.JSX.Element => (
             <TrestleBent key={`bent-${idx}`} sample={pier} />
           ))}
         </>

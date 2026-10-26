@@ -12,20 +12,19 @@
 * **Rotation Lock:** Rotation is strictly disabled (`enableRotate={false}`). Smooth pan and clamped zoom (`26`–`68`) allow inspecting details while preserving the diorama composition.
 * **Geological Strata Cutaway:** The 4 vertical sides trace the contour of the terrain and are mapped with procedurally synthesized horizontal rock strata bands corresponding to real Colorado Plateau formations (Moenkopi, Entrada, and Navajo sandstone caps).
 
-### 2.2. Dramatic Desert Landscape & Terraforming
-* **Terraced Sandstone Mesas & Buttes:** Multi-tier step function creates sheer near-vertical cliffs interspersed with flat mesa tops.
-* **Flat Basin Floor:** A broad, gentle central basin accommodates frontier settlements, railway yards, and looping tracks without jagged terrain collisions.
-* **Dry Arroyo (Wash):** A winding dry riverbed carved through sandstone with pale sand and scattered gravel pebbles.
-* **Realistic Procedural Textures:**
-  * **Sand Grain & Bump Map:** Tileable periodic noise texture providing fine sand surface bump, specular highlights, and pebble speckles.
-  * **Strata UV Mapping:** Vertical cutaway skirts sample procedural strata bands indexed to world elevation.
-* **Dynamic Railway Grading:**
-  * Through mesas, tracks carve sloped rock cuttings down to grade.
-  * Over the dry wash, the ground remains depressed and the railway automatically spawns a timber trestle bridge.
+### 2.2. Untouched Natural Landscape & Grade-Conforming Tracks
+* **Zero Landscape Modification:** The terrain is 100% natural and never carved, flattened, or excavated by tracks. Dramatic cliffs, mesas, and dry arroyos remain completely untouched and pristine.
+* **Landscape-Aligned 3D Track Profile:** Tracks rise and fall with the natural landscape contours.
+* **Grade-Limiting Relaxation & Adaptive Substructures:**
+  * To prevent excessively steep inclines over cliffs or canyons, multi-pass vertical relaxation caps the maximum rail grade at 16%.
+  * Where the natural terrain drops beneath the track, adaptive supporting structures are generated below the rails:
+    * **Flush Ground Contact ($h \le 0.10$m):** Standard gravel ballast bed resting directly on the desert sand.
+    * **Low/Moderate Fills ($0.10 < h \le 0.30$m):** Stacked timber cribbing walls and retaining abutments.
+    * **High Spans & Canyon Crossings ($h > 0.30$m):** Multi-tier frontier timber trestle bents with splayed batter posts, horizontal girt braces, and stone footing blocks.
 
-### 2.3. Timber Trestle Bridges & Narrow-Gauge Tracks
-* **Continuous Spline Tracks:** Free-form `CatmullRomCurve3` with extruded steel rails and gravel ballast ribbon.
-* **Frontier Timber Trestles:** Wherever rails cross the dry wash or deep chasms, the system generates battered timber trestle bents with splayed upright posts, girts, cap beams, and wooden deck walkways.
+### 2.3. Timber Trestles, Cribbing & Continuous Spline Rails
+* **Continuous Spline Tracks:** Free-form `CatmullRomCurve3` with extruded steel rails and gravel ballast ribbon conforming to 3D track elevation.
+* **Full Substructure System:** Dynamic timber cribbing and trestles anchor the tracks into the terrain while preserving the natural landscape below.
 
 ### 2.4. Southwestern Architecture & Desert Props
 * **Adobe Pueblos:** Stackable Southwestern adobes with stepped back stories, projecting roof vigas, parapets, and wooden ladders.

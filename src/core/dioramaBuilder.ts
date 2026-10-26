@@ -7,10 +7,8 @@ import {
 } from '../types/diorama';
 import {
   hashCoords,
-  MIN_TRACK_Y,
-  PLAIN_Y,
   sampleNaturalTerrainHeight,
-  sampleTerraformedHeight,
+  TRACK_BED_OFFSET,
 } from './noise';
 import { isBuildableSite, scatterDesertProps } from './propScatter';
 import { buildSplineSamples } from './trackGraph';
@@ -25,13 +23,12 @@ function validateWorld(world: OrganicDioramaWorld): void {
 }
 
 /**
- * Rail grade: hugs the basin floor, climbs only gently onto mesas (so cuttings are carved),
- * and never drops below MIN_TRACK_Y (so the dry wash is spanned by trestles).
+ * Tracks conform directly to the natural landscape elevation.
+ * Spline relaxation then smooths out overly steep gradients by elevating
+ * tracks on substructures.
  */
 function computeTrackPointY(x: number, z: number, seed: number): number {
-  const rawY = sampleNaturalTerrainHeight(x, z, seed);
-  const above = Math.max(0, rawY - PLAIN_Y);
-  return Math.max(MIN_TRACK_Y, Math.min(PLAIN_Y + 0.55, PLAIN_Y + 0.05 + above * 0.3));
+  return sampleNaturalTerrainHeight(x, z, seed) + TRACK_BED_OFFSET;
 }
 
 function rebuildSamples(
@@ -65,7 +62,7 @@ function buildStarterStructures(
       id: 'starter-station',
       kind: 'station',
       x: sx,
-      y: sampleTerraformedHeight(sx, sz, seed, samples),
+      y: sampleNaturalTerrainHeight(sx, sz, seed),
       z: sz,
       rotationY: stationSample.yawRadians,
       stories: 1,
@@ -87,7 +84,7 @@ function buildStarterStructures(
       id: `starter-cottage-${idx}`,
       kind: 'cottage',
       x: cx,
-      y: sampleTerraformedHeight(cx, cz, seed, samples),
+      y: sampleNaturalTerrainHeight(cx, cz, seed),
       z: cz,
       rotationY: idx * 0.4,
       stories,
@@ -248,7 +245,7 @@ function applyBuildingTool(
     id: `struct-${Date.now()}-${Math.round(worldX * 100)}-${Math.round(worldZ * 100)}`,
     kind: tool === 'cottage' ? 'cottage' : tool === 'station' ? 'station' : 'planted_trees',
     x: worldX,
-    y: sampleTerraformedHeight(worldX, worldZ, world.seed, world.splineSamples),
+    y: sampleNaturalTerrainHeight(worldX, worldZ, world.seed),
     z: worldZ,
     rotationY,
     stories: 1,

@@ -17,13 +17,12 @@ import {
 import { computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y } from '../core/desertPalette';
 import {
   hashCoords,
-  sampleTerraformedHeight,
+  sampleNaturalTerrainHeight,
   sampleWashFactor,
   valueNoise2D,
 } from '../core/noise';
 import { generateGrainPixels, generateStrataPixels } from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
-import { SplineSample } from '../types/diorama';
 import { DesertPropItem } from './DesertFlora';
 
 const MESH_SEGMENTS = 128;
@@ -37,8 +36,7 @@ interface TerrainGeometries {
 
 function buildSculptedTerrainGeometry(
   span: number,
-  seed: number,
-  splineSamples: ReadonlyArray<SplineSample>
+  seed: number
 ): TerrainGeometries {
   const half = span * 0.5;
   const step = span / MESH_SEGMENTS;
@@ -48,7 +46,7 @@ function buildSculptedTerrainGeometry(
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
     const row: number[] = [];
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
-      row.push(sampleTerraformedHeight(-half + ix * step, -half + iz * step, seed, splineSamples));
+      row.push(sampleNaturalTerrainHeight(-half + ix * step, -half + iz * step, seed));
     }
     heights.push(row);
   }
@@ -183,9 +181,8 @@ export function DioramaTerrain(): React.JSX.Element {
   );
 
   const geometries = useMemo(
-    (): TerrainGeometries =>
-      buildSculptedTerrainGeometry(world.span, world.seed, world.splineSamples),
-    [world.span, world.seed, world.splineSamples]
+    (): TerrainGeometries => buildSculptedTerrainGeometry(world.span, world.seed),
+    [world.span, world.seed]
   );
   const grainTexture = useMemo((): DataTexture => createGrainTexture(world.seed), [world.seed]);
   const strataTexture = useMemo((): DataTexture => createStrataTexture(world.seed), [world.seed]);

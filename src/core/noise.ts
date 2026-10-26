@@ -5,8 +5,8 @@ export const DIORAMA_SPAN = 16.0;
 export const PLAIN_Y = 0.42;
 /** Elevation of the dry arroyo (wash) bed. */
 export const WASH_BED_Y = 0.1;
-/** Lowest allowed rail-head elevation (keeps trestles above the wash). */
-export const MIN_TRACK_Y = 0.47;
+/** Minimal clearance above natural terrain for the track bed. */
+export const TRACK_BED_OFFSET = 0.04;
 
 /** Mesa mask thresholds for each terraced cliff tier. */
 const MESA_THRESHOLDS: readonly [number, number, number] = [0.545, 0.625, 0.69];
@@ -88,7 +88,7 @@ export function sampleMesaMask(worldX: number, worldZ: number, seed: number): nu
   const warpZ = worldZ + (valueNoise2D(worldX * 0.25, worldZ * 0.25, seed + 47) - 0.5) * 2.6;
   let mask = fractalNoise2D(warpX * 1.1 + 40, warpZ * 1.1 + 40, seed + 5);
 
-  // Keep a broad, flat central basin for the town and rails
+  // Keep a broad, flat central basin for settlements and track loops
   const radial = Math.hypot(worldX, worldZ);
   mask -= 0.14 * (1 - smoothRange(2.5, 6.5, radial));
 
@@ -142,6 +142,11 @@ export function sampleNaturalTerrainHeight(worldX: number, worldZ: number, seed:
   return height;
 }
 
+/**
+ * Natural untouched landscape height.
+ * The landscape is NEVER modified or flattened by train tracks;
+ * tracks instead conform to the landscape and are elevated on substructures.
+ */
 export function sampleTerraformedHeight(
   worldX: number,
   worldZ: number,
@@ -155,39 +160,5 @@ export function sampleTerraformedHeight(
     throw new TypeError('CRITICAL: splineSamples must be an array.');
   }
 
-  const naturalY = sampleNaturalTerrainHeight(worldX, worldZ, seed);
-  if (splineSamples.length === 0) {
-    return naturalY;
-  }
-
-  let minDistSq = Number.POSITIVE_INFINITY;
-  let nearestTrackY = naturalY;
-  for (let i = 0; i < splineSamples.length; i += 2) {
-    const s = splineSamples[i];
-    const dx = worldX - s.x;
-    const dz = worldZ - s.z;
-    const dSq = dx * dx + dz * dz;
-    if (dSq < minDistSq) {
-      minDistSq = dSq;
-      nearestTrackY = s.y;
-    }
-  }
-
-  const corridorRadius = 1.15;
-  if (minDistSq >= corridorRadius * corridorRadius) {
-    return naturalY;
-  }
-
-  const t = smoothRange(0.34, corridorRadius, Math.sqrt(minDistSq));
-  const targetBedY = nearestTrackY - 0.03;
-  const fill = targetBedY - naturalY;
-
-  if (fill <= 0) {
-    // Cutting: carve the hillside / mesa down to the track grade
-    return lerp(targetBedY, naturalY, t);
-  }
-
-  // Embankment: small gaps get filled, deep gaps fade out (trestle bridges span them)
-  const fillFade = 1 - smoothRange(0.1, 0.24, fill);
-  return naturalY + fill * (1 - t) * fillFade;
+  return sampleNaturalTerrainHeight(worldX, worldZ, seed);
 }
