@@ -91,3 +91,54 @@ export function generateStrataPixels(width: number, height: number, seed: number
   }
   return data;
 }
+
+/**
+ * Tangent-space normal map generated from periodic sand grain noise.
+ * Encodes [Nx, Ny, Nz] in [R, G, B] as [0..255] with seamless wrap-around tiling.
+ */
+export function generateSandNormalPixels(size: number, seed: number, strength: number): Uint8Array {
+  validatePowerOfTwo(size, 'size');
+  validateSeed(seed);
+  if (typeof strength !== 'number' || !Number.isFinite(strength) || strength <= 0) {
+    throw new RangeError('CRITICAL: strength must be a positive finite number.');
+  }
+
+  const heightField = new Float32Array(size * size);
+  for (let py = 0; py < size; py += 1) {
+    for (let px = 0; px < size; px += 1) {
+      const medium = periodicValueNoise((px / size) * 8, (py / size) * 8, 8, seed);
+      const fine = hashCoords(px, py, seed + 7);
+      let v = medium * 0.7 + fine * 0.3;
+      if (fine > 0.985) v -= 0.35; // recessed pebble edges
+      if (fine < 0.012) v += 0.25; // raised sand crests
+      heightField[py * size + px] = v;
+    }
+  }
+
+  const data = new Uint8Array(size * size * 4);
+  const wrap = (coord: number): number => ((coord % size) + size) % size;
+
+  for (let py = 0; py < size; py += 1) {
+    for (let px = 0; px < size; px += 1) {
+      const hL = heightField[py * size + wrap(px - 1)];
+      const hR = heightField[py * size + wrap(px + 1)];
+      const hD = heightField[wrap(py - 1) * size + px];
+      const hU = heightField[wrap(py + 1) * size + px];
+
+      const dx = (hR - hL) * strength;
+      const dy = (hU - hD) * strength;
+      const invLen = 1 / Math.hypot(-dx, -dy, 1.0);
+
+      const nx = -dx * invLen;
+      const ny = -dy * invLen;
+      const nz = 1.0 * invLen;
+
+      const i = (py * size + px) * 4;
+      data[i] = toByte(nx * 0.5 + 0.5);
+      data[i + 1] = toByte(ny * 0.5 + 0.5);
+      data[i + 2] = toByte(nz * 0.5 + 0.5);
+      data[i + 3] = 255;
+    }
+  }
+  return data;
+}

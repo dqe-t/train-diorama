@@ -239,19 +239,39 @@ export function DioramaTracks(): React.JSX.Element | null {
       {trackData !== null && (
         <>
           <mesh geometry={trackData.ballastGeo} receiveShadow castShadow>
-            <meshStandardMaterial color="#a3826a" roughness={0.95} side={DoubleSide} />
+            <meshStandardMaterial
+              color="#8c6a50"
+              roughness={0.94}
+              side={DoubleSide}
+              envMapIntensity={0.5}
+            />
           </mesh>
 
           <mesh geometry={trackData.leftRailGeo} castShadow>
-            <meshStandardMaterial color="#555d66" metalness={0.6} roughness={0.35} />
+            <meshStandardMaterial
+              color="#d6dde6"
+              metalness={0.92}
+              roughness={0.2}
+              envMapIntensity={2.0}
+            />
           </mesh>
           <mesh geometry={trackData.rightRailGeo} castShadow>
-            <meshStandardMaterial color="#555d66" metalness={0.6} roughness={0.35} />
+            <meshStandardMaterial
+              color="#d6dde6"
+              metalness={0.92}
+              roughness={0.2}
+              envMapIntensity={2.0}
+            />
           </mesh>
 
           {trackData.bridgeDeckGeo !== null && (
             <mesh geometry={trackData.bridgeDeckGeo} receiveShadow castShadow>
-              <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} side={DoubleSide} />
+              <meshStandardMaterial
+                color={TRESTLE_WOOD_DARK}
+                roughness={0.92}
+                envMapIntensity={0.6}
+                side={DoubleSide}
+              />
             </mesh>
           )}
 
@@ -263,7 +283,7 @@ export function DioramaTracks(): React.JSX.Element | null {
             >
               <mesh castShadow receiveShadow>
                 <boxGeometry args={[0.42, 0.024, 0.058]} />
-                <meshStandardMaterial color="#66442b" roughness={0.9} />
+                <meshStandardMaterial color="#523620" roughness={0.88} envMapIntensity={0.6} />
               </mesh>
             </group>
           ))}

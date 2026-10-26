@@ -15,6 +15,7 @@ import {
   SRGBColorSpace,
   Texture,
   TextureLoader,
+  Vector2,
 } from 'three';
 import { computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y } from '../core/desertPalette';
 import {
@@ -23,7 +24,11 @@ import {
   sampleWashFactor,
   valueNoise2D,
 } from '../core/noise';
-import { generateGrainPixels, generateStrataPixels } from '../core/textureSynthesis';
+import {
+  generateGrainPixels,
+  generateSandNormalPixels,
+  generateStrataPixels,
+} from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
 import { DesertPropItem } from './DesertFlora';
 
@@ -170,6 +175,19 @@ function createStrataTexture(seed: number): DataTexture {
   return tex;
 }
 
+function createSandNormalTexture(seed: number): DataTexture {
+  const size = GRAIN_TEXTURE_SIZE;
+  const tex = new DataTexture(generateSandNormalPixels(size, seed, 2.2), size, size, RGBAFormat);
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = RepeatWrapping;
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function loadPhotorealisticStrataTexture(fallback: DataTexture): Texture {
   if (typeof window === 'undefined') return fallback;
   const loader = new TextureLoader();
@@ -217,6 +235,11 @@ export function DioramaTerrain(): React.JSX.Element {
     return loadPhotorealisticSandTexture(procedural);
   }, [world.seed]);
 
+  const sandNormalTexture = useMemo(
+    (): DataTexture => createSandNormalTexture(world.seed),
+    [world.seed]
+  );
+
   const strataTexture = useMemo((): Texture => {
     const procedural = createStrataTexture(world.seed);
     return loadPhotorealisticStrataTexture(procedural);
@@ -230,6 +253,7 @@ export function DioramaTerrain(): React.JSX.Element {
     [geometries]
   );
   useEffect((): (() => void) => (): void => grainTexture.dispose(), [grainTexture]);
+  useEffect((): (() => void) => (): void => sandNormalTexture.dispose(), [sandNormalTexture]);
   useEffect((): (() => void) => (): void => strataTexture.dispose(), [strataTexture]);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>): void => {
@@ -252,6 +276,8 @@ export function DioramaTerrain(): React.JSX.Element {
     }
   };
 
+  const normalScale = useMemo((): Vector2 => new Vector2(0.85, 0.85), []);
+
   return (
     <group
       onPointerUp={(): void => setPointerDragging(false)}
@@ -260,18 +286,29 @@ export function DioramaTerrain(): React.JSX.Element {
         setPointerDragging(false);
       }}
     >
-      {/* Walnut display plinth */}
+      {/* Polished walnut museum display plinth */}
       <mesh position={[0, STRATA_BOTTOM_Y - 0.17, 0]} receiveShadow castShadow>
         <boxGeometry args={[world.span + 0.65, 0.34, world.span + 0.65]} />
-        <meshStandardMaterial color="#3f2a1c" roughness={0.6} />
+        <meshStandardMaterial
+          color="#2a1a0f"
+          roughness={0.38}
+          metalness={0.12}
+          envMapIntensity={1.3}
+        />
       </mesh>
 
       {/* Strata cutaway sides */}
       <mesh geometry={geometries.skirtGeo} receiveShadow castShadow>
-        <meshStandardMaterial map={strataTexture} roughness={0.95} side={DoubleSide} />
+        <meshStandardMaterial
+          map={strataTexture}
+          roughness={0.88}
+          metalness={0.03}
+          envMapIntensity={0.7}
+          side={DoubleSide}
+        />
       </mesh>
 
-      {/* Sculpted desert surface */}
+      {/* Sculpted desert surface with normal relief */}
       <mesh
         geometry={geometries.surfaceGeo}
         receiveShadow
@@ -282,9 +319,11 @@ export function DioramaTerrain(): React.JSX.Element {
         <meshStandardMaterial
           vertexColors
           map={grainTexture}
-          bumpMap={grainTexture}
-          bumpScale={1.2}
-          roughness={0.96}
+          normalMap={sandNormalTexture}
+          normalScale={normalScale}
+          roughness={0.92}
+          metalness={0.03}
+          envMapIntensity={0.65}
         />
       </mesh>
 
