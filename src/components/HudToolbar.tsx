@@ -12,32 +12,32 @@ interface ToolDescriptor {
 const TOOLS: ReadonlyArray<ToolDescriptor> = [
   {
     id: 'track',
-    label: 'Sculpt Track',
-    hint: 'Click or drag anywhere on the 3D landscape to weave organic spline tracks',
+    label: 'Lay Rails',
+    hint: 'Click or drag across the desert — rails cut through mesas and trestle over the dry wash',
     badgeColor: '#555d66',
   },
   {
     id: 'cottage',
-    label: 'Cottage',
-    hint: 'Click hills or meadows to place a cottage (click existing to stack taller)',
-    badgeColor: '#c95b44',
+    label: 'Adobe',
+    hint: 'Click flat ground to build an adobe (click an existing one to stack another story)',
+    badgeColor: '#c4855a',
   },
   {
     id: 'station',
-    label: 'Station',
-    hint: 'Place a rural train station — automatically aligns to the nearest track curve',
-    badgeColor: '#425d70',
+    label: 'Depot',
+    hint: 'Place a frontier depot with water tower — aligns to the nearest track curve',
+    badgeColor: '#5b3a26',
   },
   {
     id: 'trees',
-    label: 'Grove',
-    hint: 'Click or drag to plant lush miniature tree groves',
-    badgeColor: '#5ca653',
+    label: 'Cactus',
+    hint: 'Click or drag to plant saguaro and prickly-pear patches',
+    badgeColor: '#5d7f46',
   },
   {
     id: 'demolish',
     label: 'Erase',
-    hint: 'Click or drag to remove spline points or buildings near the cursor',
+    hint: 'Click or drag to remove rail points or buildings near the cursor',
     badgeColor: '#9e5046',
   },
 ];
@@ -81,7 +81,7 @@ export function HudToolbar(): React.JSX.Element {
           Tiny Rails Diorama
         </div>
         <div style={{ fontSize: 12, color: '#786856', marginTop: 2 }}>
-          Sculpted 3D Landscape & Organic Splines • Seed #{seed} • Right-Drag to Slide
+          Red Rock Desert • Mesas, Arches & Dry Wash • Seed #{seed} • Right-Drag to Slide
         </div>
       </div>
 

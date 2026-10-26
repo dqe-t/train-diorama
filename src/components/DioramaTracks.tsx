@@ -87,13 +87,13 @@ function buildContinuousTrackMeshes(
   ballastGeo.setIndex(indices);
   ballastGeo.computeVertexNormals();
 
-  // 3. Extract evenly spaced sleepers and stone viaduct bridge piers
+  // 3. Extract evenly spaced sleepers and timber trestle bents
   const sleeperSamples: SplineSample[] = [];
   const viaductPiers: SplineSample[] = [];
 
   for (let i = 0; i < loopCount; i += 1) {
     sleeperSamples.push(samples[i]);
-    if (samples[i].isBridge && i % 4 === 0) {
+    if (samples[i].isBridge && i % 2 === 0) {
       viaductPiers.push(samples[i]);
     }
   }
@@ -105,6 +105,54 @@ function buildContinuousTrackMeshes(
     sleeperSamples,
     viaductPiers,
   };
+}
+
+const TRESTLE_WOOD = '#7a5233';
+const TRESTLE_WOOD_DARK = '#5e3f27';
+
+/** Battered timber trestle bent: splayed outer posts, a center post, cap beam and girts. */
+function TrestleBent({ sample }: { readonly sample: SplineSample }): React.JSX.Element {
+  const bottomY = sample.terrainY - 0.06;
+  const topY = sample.y - 0.07;
+  const height = Math.max(0.12, topY - bottomY);
+  const midY = bottomY + height * 0.5;
+  const spread = height * 0.14;
+  const lean = Math.atan2(spread, height);
+  const girtCount = Math.floor(height / 0.32);
+
+  return (
+    <group position={[sample.x, 0, sample.z]} rotation={[0, sample.yawRadians, 0]}>
+      {[-1, 1].map((side): React.JSX.Element => (
+        <mesh
+          key={side}
+          position={[side * (0.17 + spread * 0.5), midY, 0]}
+          rotation={[0, 0, side * lean]}
+          castShadow
+        >
+          <boxGeometry args={[0.035, height, 0.035]} />
+          <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.92} />
+        </mesh>
+      ))}
+      <mesh position={[0, midY, 0]} castShadow>
+        <boxGeometry args={[0.035, height, 0.035]} />
+        <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.92} />
+      </mesh>
+      <mesh position={[0, topY, 0]} castShadow>
+        <boxGeometry args={[0.5, 0.04, 0.06]} />
+        <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
+      </mesh>
+      {Array.from({ length: girtCount }).map((_, idx): React.JSX.Element => {
+        const gy = topY - (idx + 1) * 0.32;
+        const width = 0.36 + ((topY - gy) / height) * spread * 2;
+        return (
+          <mesh key={idx} position={[0, gy, 0]} castShadow>
+            <boxGeometry args={[width, 0.025, 0.03]} />
+            <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
 }
 
 export function DioramaTracks(): React.JSX.Element | null {
@@ -130,7 +178,7 @@ export function DioramaTracks(): React.JSX.Element | null {
         <>
           {/* Continuous Gravel Ballast Bed */}
           <mesh geometry={trackData.ballastGeo} receiveShadow castShadow>
-            <meshStandardMaterial color="#9e9689" roughness={0.95} side={DoubleSide} />
+            <meshStandardMaterial color="#a3826a" roughness={0.95} side={DoubleSide} />
           </mesh>
 
           {/* Continuous Extruded Steel Rails */}
@@ -153,48 +201,30 @@ export function DioramaTracks(): React.JSX.Element | null {
                 <meshStandardMaterial color="#66442b" roughness={0.9} />
               </mesh>
 
-              {/* Continuous Timber & Stone Deck Guardrails over Bridges */}
+              {/* Timber deck stringers & walkway over trestles */}
               {s.isBridge && (
                 <>
-                  <mesh position={[0, -0.045, 0]} castShadow receiveShadow>
-                    <boxGeometry args={[0.64, 0.055, 0.24]} />
-                    <meshStandardMaterial color="#87837a" roughness={0.9} />
+                  <mesh position={[0, -0.035, 0]} castShadow receiveShadow>
+                    <boxGeometry args={[0.5, 0.04, 0.2]} />
+                    <meshStandardMaterial color={TRESTLE_WOOD_DARK} roughness={0.92} />
                   </mesh>
-                  <mesh position={[-0.29, 0.04, 0]} castShadow>
-                    <boxGeometry args={[0.04, 0.11, 0.24]} />
-                    <meshStandardMaterial color="#969187" roughness={0.88} />
+                  <mesh position={[-0.24, 0.0, 0]} castShadow>
+                    <boxGeometry args={[0.03, 0.05, 0.22]} />
+                    <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.9} />
                   </mesh>
-                  <mesh position={[0.29, 0.04, 0]} castShadow>
-                    <boxGeometry args={[0.04, 0.11, 0.24]} />
-                    <meshStandardMaterial color="#969187" roughness={0.88} />
+                  <mesh position={[0.24, 0.0, 0]} castShadow>
+                    <boxGeometry args={[0.03, 0.05, 0.22]} />
+                    <meshStandardMaterial color={TRESTLE_WOOD} roughness={0.9} />
                   </mesh>
                 </>
               )}
             </group>
           ))}
 
-          {/* Stone Viaduct Piers Supporting Water & Valley Crossings */}
-          {trackData.viaductPiers.map((pier, idx): React.JSX.Element => {
-            const pierBottom = Math.min(-0.18, pier.terrainY);
-            const pierHeight = Math.max(0.2, pier.y - pierBottom - 0.04);
-            const centerY = pierBottom + pierHeight * 0.5;
-            return (
-              <group
-                key={`pier-${idx}`}
-                position={[pier.x, centerY, pier.z]}
-                rotation={[0, pier.yawRadians, 0]}
-              >
-                <mesh castShadow receiveShadow>
-                  <boxGeometry args={[0.54, pierHeight, 0.18]} />
-                  <meshStandardMaterial color="#7d7a72" roughness={0.92} />
-                </mesh>
-                <mesh position={[0, pierHeight * 0.5 - 0.05, 0]} castShadow>
-                  <boxGeometry args={[0.62, 0.08, 0.24]} />
-                  <meshStandardMaterial color="#8f8b82" roughness={0.9} />
-                </mesh>
-              </group>
-            );
-          })}
+          {/* Timber trestle bents spanning the dry wash */}
+          {trackData.viaductPiers.map((pier, idx): React.JSX.Element => (
+            <TrestleBent key={`bent-${idx}`} sample={pier} />
+          ))}
         </>
       )}
     </group>

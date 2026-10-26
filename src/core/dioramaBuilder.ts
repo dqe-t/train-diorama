@@ -1,8 +1,6 @@
 import {
-  NaturalProp,
   OrganicDioramaWorld,
   PlacedStructure,
-  PropKind,
   SplineSample,
   ToolType,
   Vec3Point,
@@ -10,95 +8,93 @@ import {
 import {
   hashCoords,
   MIN_TRACK_Y,
+  PLAIN_Y,
   sampleNaturalTerrainHeight,
   sampleTerraformedHeight,
-  WATER_LEVEL_Y,
 } from './noise';
+import { isBuildableSite, scatterDesertProps } from './propScatter';
 import { buildSplineSamples } from './trackGraph';
 
 const DEFAULT_SPLINE_SAMPLES = 160;
+const VALID_TOOLS: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish'];
 
-function computeTrackPointY(x: number, z: number, seed: number): number {
-  const rawY = sampleNaturalTerrainHeight(x, z, seed);
-  // Smoothly dampen extreme mountain heights so trains maintain a gentle scenic grade
-  const gradedY = Math.max(MIN_TRACK_Y, WATER_LEVEL_Y + 0.22 + Math.max(0, rawY - 0.35) * 0.55);
-  return Math.min(1.38, gradedY);
+function validateWorld(world: OrganicDioramaWorld): void {
+  if (!world || typeof world.span !== 'number') {
+    throw new TypeError('CRITICAL: Valid OrganicDioramaWorld is required.');
+  }
 }
 
-function scatterNaturalProps(
-  span: number,
+/**
+ * Rail grade: hugs the basin floor, climbs only gently onto mesas (so cuttings are carved),
+ * and never drops below MIN_TRACK_Y (so the dry wash is spanned by trestles).
+ */
+function computeTrackPointY(x: number, z: number, seed: number): number {
+  const rawY = sampleNaturalTerrainHeight(x, z, seed);
+  const above = Math.max(0, rawY - PLAIN_Y);
+  return Math.max(MIN_TRACK_Y, Math.min(PLAIN_Y + 0.55, PLAIN_Y + 0.05 + above * 0.3));
+}
+
+function rebuildSamples(
+  points: ReadonlyArray<Vec3Point>,
+  closed: boolean,
+  seed: number
+): ReadonlyArray<SplineSample> {
+  return points.length >= 2 ? buildSplineSamples(points, closed, seed, DEFAULT_SPLINE_SAMPLES) : [];
+}
+
+function buildStarterStructures(
   seed: number,
-  splineSamples: ReadonlyArray<SplineSample>,
-  structures: ReadonlyArray<PlacedStructure>
-): ReadonlyArray<NaturalProp> {
-  const props: NaturalProp[] = [];
-  const half = span * 0.5 - 0.7;
-  const gridCells = 19;
-  const step = (half * 2) / gridCells;
-
-  for (let gx = 0; gx < gridCells; gx += 1) {
-    for (let gz = 0; gz < gridCells; gz += 1) {
-      const densityRoll = hashCoords(gx * 7, gz * 13, seed + 401);
-      if (densityRoll < 0.42) {
-        continue;
-      }
-
-      const jx = (hashCoords(gx, gz, seed + 101) - 0.5) * step * 0.85;
-      const jz = (hashCoords(gx, gz, seed + 202) - 0.5) * step * 0.85;
-      const wx = -half + (gx + 0.5) * step + jx;
-      const wz = -half + (gz + 0.5) * step + jz;
-
-      const y = sampleTerraformedHeight(wx, wz, seed, splineSamples);
-      if (y < WATER_LEVEL_Y + 0.08 || y > 1.85) {
-        continue;
-      }
-
-      // Keep clear of the railway corridor
-      const nearTrack = splineSamples.some(
-        (s): boolean => (s.x - wx) * (s.x - wx) + (s.z - wz) * (s.z - wz) < 0.72 * 0.72
-      );
-      if (nearTrack) {
-        continue;
-      }
-
-      // Keep clear of placed buildings
-      const nearStruct = structures.some(
-        (st): boolean => (st.x - wx) * (st.x - wx) + (st.z - wz) * (st.z - wz) < 0.85 * 0.85
-      );
-      if (nearStruct) {
-        continue;
-      }
-
-      const typeRoll = hashCoords(gx, gz, seed + 709);
-      let kind: PropKind = 'pine';
-      if (y > 1.32) {
-        kind = typeRoll > 0.45 ? 'rock' : 'pine';
-      } else if (y > 0.82) {
-        kind = typeRoll > 0.72 ? 'rock' : typeRoll > 0.3 ? 'pine' : 'autumn_tree';
-      } else {
-        if (typeRoll > 0.78) kind = 'autumn_tree';
-        else if (typeRoll > 0.42) kind = 'puff_tree';
-        else if (typeRoll > 0.18) kind = 'pine';
-        else kind = 'bush';
-      }
-
-      const scale = 0.78 + hashCoords(gx, gz, seed + 888) * 0.52;
-      const rotationY = hashCoords(gx, gz, seed + 999) * Math.PI * 2;
-      const colorVariant = Math.floor(hashCoords(gx, gz, seed + 555) * 4);
-
-      props.push({
-        id: `prop-${gx}-${gz}`,
-        kind,
-        x: wx,
-        y,
-        z: wz,
-        scale,
-        rotationY,
-        colorVariant,
-      });
-    }
+  samples: ReadonlyArray<SplineSample>
+): PlacedStructure[] {
+  const structures: PlacedStructure[] = [];
+  if (samples.length <= 20) {
+    return structures;
   }
-  return props;
+
+  // Depot beside the first flat, non-bridge stretch of track
+  const stationSample = samples.find((s, idx): boolean => {
+    if (s.isBridge || idx < 4) return false;
+    const sx = s.x + s.normalX * 0.82;
+    const sz = s.z + s.normalZ * 0.82;
+    return isBuildableSite(sx, sz, seed, samples);
+  });
+  if (stationSample) {
+    const sx = stationSample.x + stationSample.normalX * 0.82;
+    const sz = stationSample.z + stationSample.normalZ * 0.82;
+    structures.push({
+      id: 'starter-station',
+      kind: 'station',
+      x: sx,
+      y: sampleTerraformedHeight(sx, sz, seed, samples),
+      z: sz,
+      rotationY: stationSample.yawRadians,
+      stories: 1,
+      colorVariant: 0,
+    });
+  }
+
+  // A small adobe pueblo cluster in the flat central basin
+  const offsets: ReadonlyArray<readonly [number, number, number]> = [
+    [-1.8, -1.2, 2],
+    [-0.7, -1.9, 1],
+    [1.4, -1.6, 3],
+    [2.1, -0.6, 1],
+    [0.3, 1.4, 2],
+  ];
+  offsets.forEach(([cx, cz, stories], idx): void => {
+    if (!isBuildableSite(cx, cz, seed, samples)) return;
+    structures.push({
+      id: `starter-cottage-${idx}`,
+      kind: 'cottage',
+      x: cx,
+      y: sampleTerraformedHeight(cx, cz, seed, samples),
+      z: cz,
+      rotationY: idx * 0.4,
+      stories,
+      colorVariant: idx,
+    });
+  });
+  return structures;
 }
 
 export function createOrganicDiorama(
@@ -118,208 +114,107 @@ export function createOrganicDiorama(
 
   const trackPoints: Vec3Point[] = [];
   if (withStarterTrack) {
-    // Sweeping figure-ish kidney loop crossing the river twice and curving around hills
-    const loopAngles = 12;
-    for (let i = 0; i < loopAngles; i += 1) {
-      const theta = (i / loopAngles) * Math.PI * 2;
-      const radiusX = 5.1 + Math.sin(theta * 2) * 0.75;
-      const radiusZ = 4.4 + Math.cos(theta * 3) * 0.65;
-      const wx = Math.cos(theta) * radiusX;
-      const wz = Math.sin(theta) * radiusZ;
-      trackPoints.push({
-        x: wx,
-        y: computeTrackPointY(wx, wz, seed),
-        z: wz,
-      });
+    // Sweeping kidney loop that crosses the wash and cuts through mesa flanks
+    const nodes = 12;
+    for (let i = 0; i < nodes; i += 1) {
+      const theta = (i / nodes) * Math.PI * 2;
+      const wx = Math.cos(theta) * (5.1 + Math.sin(theta * 2) * 0.75);
+      const wz = Math.sin(theta) * (4.4 + Math.cos(theta * 3) * 0.65);
+      trackPoints.push({ x: wx, y: computeTrackPointY(wx, wz, seed), z: wz });
     }
   }
 
-  const trackClosed = withStarterTrack;
-  const splineSamples =
-    trackPoints.length >= 2
-      ? buildSplineSamples(trackPoints, trackClosed, seed, DEFAULT_SPLINE_SAMPLES)
-      : [];
-
-  const structures: PlacedStructure[] = [];
-  if (withStarterTrack && splineSamples.length > 20) {
-    // Place a scenic train station aligned along a flat meadow stretch of the spline
-    const stationSample =
-      splineSamples.find((s): boolean => !s.isBridge && s.terrainY > WATER_LEVEL_Y + 0.14) ??
-      splineSamples[10];
-
-    const stationX = stationSample.x + stationSample.normalX * 0.82;
-    const stationZ = stationSample.z + stationSample.normalZ * 0.82;
-    const stationY = sampleTerraformedHeight(stationX, stationZ, seed, splineSamples);
-
-    if (stationY > WATER_LEVEL_Y + 0.08) {
-      structures.push({
-        id: 'starter-station',
-        kind: 'station',
-        x: stationX,
-        y: stationY,
-        z: stationZ,
-        rotationY: stationSample.yawRadians,
-        stories: 1,
-        colorVariant: 0,
-      });
-    }
-
-    // Place a small cluster of cozy cottages near the village
-    const cottageOffsets: ReadonlyArray<readonly [number, number, number]> = [
-      [-1.8, -1.2, 2],
-      [-0.7, -1.9, 1],
-      [1.4, -1.6, 1],
-      [2.1, -0.8, 2],
-    ];
-    cottageOffsets.forEach(([cx, cz, stories], idx): void => {
-      const cy = sampleTerraformedHeight(cx, cz, seed, splineSamples);
-      if (cy > WATER_LEVEL_Y + 0.1) {
-        structures.push({
-          id: `starter-cottage-${idx}`,
-          kind: 'cottage',
-          x: cx,
-          y: cy,
-          z: cz,
-          rotationY: idx * 1.1,
-          stories,
-          colorVariant: idx,
-        });
-      }
-    });
-  }
-
-  const naturalProps = scatterNaturalProps(span, seed, splineSamples, structures);
+  const splineSamples = rebuildSamples(trackPoints, withStarterTrack, seed);
+  const structures = withStarterTrack ? buildStarterStructures(seed, splineSamples) : [];
 
   return {
     span,
     seed,
     trackPoints,
-    trackClosed,
+    trackClosed: withStarterTrack,
     splineSamples,
-    naturalProps,
+    naturalProps: scatterDesertProps(span, seed, splineSamples, structures),
     structures,
   };
 }
 
-export function applyWorldSpaceTool(
+function applyTrackTool(world: OrganicDioramaWorld, worldX: number, worldZ: number): OrganicDioramaWorld {
+  const newPt: Vec3Point = { x: worldX, y: computeTrackPointY(worldX, worldZ, world.seed), z: worldZ };
+  const nextPoints = [...world.trackPoints];
+  let nextClosed = world.trackClosed;
+
+  if (nextClosed) {
+    // Insert into the nearest segment of the loop to reshape it organically
+    if (nextPoints.some((p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) < 0.75)) {
+      return world;
+    }
+    let bestIdx = nextPoints.length;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < nextPoints.length; i += 1) {
+      const a = nextPoints[i];
+      const b = nextPoints[(i + 1) % nextPoints.length];
+      const d = Math.hypot(worldX - (a.x + b.x) * 0.5, worldZ - (a.z + b.z) * 0.5);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i + 1;
+      }
+    }
+    nextPoints.splice(bestIdx, 0, newPt);
+  } else if (nextPoints.length > 0) {
+    const last = nextPoints[nextPoints.length - 1];
+    if (Math.hypot(last.x - worldX, last.z - worldZ) < 0.85) {
+      return world;
+    }
+    const first = nextPoints[0];
+    if (nextPoints.length >= 4 && Math.hypot(first.x - worldX, first.z - worldZ) < 1.35) {
+      nextClosed = true; // auto-close the loop near its start
+    } else {
+      nextPoints.push(newPt);
+    }
+  } else {
+    nextPoints.push(newPt);
+  }
+
+  const nextSamples = rebuildSamples(nextPoints, nextClosed, world.seed);
+  return {
+    ...world,
+    trackPoints: nextPoints,
+    trackClosed: nextClosed,
+    splineSamples: nextSamples,
+    naturalProps: scatterDesertProps(world.span, world.seed, nextSamples, world.structures),
+  };
+}
+
+function applyDemolishTool(
+  world: OrganicDioramaWorld,
+  worldX: number,
+  worldZ: number
+): OrganicDioramaWorld {
+  const structures = world.structures.filter(
+    (st): boolean => Math.hypot(st.x - worldX, st.z - worldZ) > 0.9
+  );
+  const points = world.trackPoints.filter(
+    (p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) > 1.25
+  );
+  const closed = points.length >= 3 ? world.trackClosed : false;
+  const samples = rebuildSamples(points, closed, world.seed);
+  return {
+    ...world,
+    trackPoints: points,
+    trackClosed: closed,
+    splineSamples: samples,
+    structures,
+    naturalProps: scatterDesertProps(world.span, world.seed, samples, structures),
+  };
+}
+
+function applyBuildingTool(
   world: OrganicDioramaWorld,
   worldX: number,
   worldZ: number,
   tool: ToolType
 ): OrganicDioramaWorld {
-  if (!world || typeof world.span !== 'number') {
-    throw new TypeError('CRITICAL: Valid OrganicDioramaWorld is required.');
-  }
-  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
-    throw new TypeError('CRITICAL: worldX and worldZ must be finite numbers.');
-  }
-  const half = world.span * 0.5;
-  if (Math.abs(worldX) > half || Math.abs(worldZ) > half) {
-    throw new RangeError('CRITICAL: Target coordinates are outside the diorama bounds.');
-  }
-  const validTools: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish'];
-  if (!validTools.includes(tool)) {
-    throw new TypeError(`CRITICAL: Invalid tool "${String(tool)}".`);
-  }
-
-  if (tool === 'track') {
-    const newPt: Vec3Point = {
-      x: worldX,
-      y: computeTrackPointY(worldX, worldZ, world.seed),
-      z: worldZ,
-    };
-
-    // If starting fresh or extending an open track
-    let nextPoints = [...world.trackPoints];
-    let nextClosed = world.trackClosed;
-
-    if (nextClosed) {
-      // Insert point into the nearest segment of the closed loop to reshape it organically!
-      let bestIdx = nextPoints.length;
-      let bestDist = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < nextPoints.length; i += 1) {
-        const a = nextPoints[i];
-        const b = nextPoints[(i + 1) % nextPoints.length];
-        const mx = (a.x + b.x) * 0.5;
-        const mz = (a.z + b.z) * 0.5;
-        const d = Math.hypot(worldX - mx, worldZ - mz);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIdx = i + 1;
-        }
-      }
-      // Avoid duplicate overlapping control points
-      const tooClose = nextPoints.some(
-        (p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) < 0.75
-      );
-      if (tooClose) {
-        return world;
-      }
-      nextPoints.splice(bestIdx, 0, newPt);
-    } else {
-      if (nextPoints.length > 0) {
-        const last = nextPoints[nextPoints.length - 1];
-        if (Math.hypot(last.x - worldX, last.z - worldZ) < 0.85) {
-          return world;
-        }
-        // Auto-close loop if clicking near the start point with >= 4 nodes
-        const first = nextPoints[0];
-        if (nextPoints.length >= 4 && Math.hypot(first.x - worldX, first.z - worldZ) < 1.35) {
-          nextClosed = true;
-        } else {
-          nextPoints.push(newPt);
-        }
-      } else {
-        nextPoints.push(newPt);
-      }
-    }
-
-    const nextSamples =
-      nextPoints.length >= 2
-        ? buildSplineSamples(nextPoints, nextClosed, world.seed, DEFAULT_SPLINE_SAMPLES)
-        : [];
-    const nextProps = scatterNaturalProps(world.span, world.seed, nextSamples, world.structures);
-
-    return {
-      ...world,
-      trackPoints: nextPoints,
-      trackClosed: nextClosed,
-      splineSamples: nextSamples,
-      naturalProps: nextProps,
-    };
-  }
-
-  if (tool === 'demolish') {
-    const remainingStructs = world.structures.filter(
-      (st): boolean => Math.hypot(st.x - worldX, st.z - worldZ) > 0.9
-    );
-    const remainingPts = world.trackPoints.filter(
-      (p): boolean => Math.hypot(p.x - worldX, p.z - worldZ) > 1.25
-    );
-    const nextClosed = remainingPts.length >= 3 ? world.trackClosed : false;
-    const nextSamples =
-      remainingPts.length >= 2
-        ? buildSplineSamples(remainingPts, nextClosed, world.seed, DEFAULT_SPLINE_SAMPLES)
-        : [];
-    const nextProps = scatterNaturalProps(world.span, world.seed, nextSamples, remainingStructs);
-
-    return {
-      ...world,
-      trackPoints: remainingPts,
-      trackClosed: nextClosed,
-      splineSamples: nextSamples,
-      structures: remainingStructs,
-      naturalProps: nextProps,
-    };
-  }
-
-  // Building placement (Cottage, Station, or Planted Trees)
-  const surfaceY = sampleTerraformedHeight(worldX, worldZ, world.seed, world.splineSamples);
-  if (surfaceY < WATER_LEVEL_Y + 0.06) {
-    return world;
-  }
-
-  // If clicking an existing cottage with the cottage tool, stack an extra story!
+  // Clicking an existing adobe with the adobe tool stacks another story
   if (tool === 'cottage') {
     const existingIdx = world.structures.findIndex(
       (st): boolean => st.kind === 'cottage' && Math.hypot(st.x - worldX, st.z - worldZ) < 0.65
@@ -327,18 +222,16 @@ export function applyWorldSpaceTool(
     if (existingIdx >= 0) {
       const updated = [...world.structures];
       const target = updated[existingIdx];
-      updated[existingIdx] = {
-        ...target,
-        stories: Math.min(3, target.stories + 1),
-      };
-      return {
-        ...world,
-        structures: updated,
-      };
+      updated[existingIdx] = { ...target, stories: Math.min(3, target.stories + 1) };
+      return { ...world, structures: updated };
     }
   }
 
-  // Align stations to the nearest track tangent; cottages get organic rotation
+  if (!isBuildableSite(worldX, worldZ, world.seed, world.splineSamples)) {
+    return world;
+  }
+
+  // Depots align to the nearest track tangent; everything else gets an organic rotation
   let rotationY = hashCoords(worldX * 10, worldZ * 10, world.seed) * Math.PI * 2;
   if (tool === 'station' && world.splineSamples.length > 0) {
     let minDist = Number.POSITIVE_INFINITY;
@@ -352,36 +245,54 @@ export function applyWorldSpaceTool(
   }
 
   const newStruct: PlacedStructure = {
-    id: `struct-${Date.now()}-${Math.round(worldX * 100)}`,
+    id: `struct-${Date.now()}-${Math.round(worldX * 100)}-${Math.round(worldZ * 100)}`,
     kind: tool === 'cottage' ? 'cottage' : tool === 'station' ? 'station' : 'planted_trees',
     x: worldX,
-    y: surfaceY,
+    y: sampleTerraformedHeight(worldX, worldZ, world.seed, world.splineSamples),
     z: worldZ,
     rotationY,
     stories: 1,
     colorVariant: Math.floor(hashCoords(worldX * 17, worldZ * 23, world.seed) * 4),
   };
 
-  const nextStructures = [...world.structures, newStruct];
-  const nextProps = scatterNaturalProps(world.span, world.seed, world.splineSamples, nextStructures);
-
+  const structures = [...world.structures, newStruct];
   return {
     ...world,
-    structures: nextStructures,
-    naturalProps: nextProps,
+    structures,
+    naturalProps: scatterDesertProps(world.span, world.seed, world.splineSamples, structures),
   };
 }
 
-export function clearAllTracks(world: OrganicDioramaWorld): OrganicDioramaWorld {
-  if (!world || typeof world.span !== 'number') {
-    throw new TypeError('CRITICAL: Valid OrganicDioramaWorld is required.');
+export function applyWorldSpaceTool(
+  world: OrganicDioramaWorld,
+  worldX: number,
+  worldZ: number,
+  tool: ToolType
+): OrganicDioramaWorld {
+  validateWorld(world);
+  if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
+    throw new TypeError('CRITICAL: worldX and worldZ must be finite numbers.');
   }
-  const nextProps = scatterNaturalProps(world.span, world.seed, [], world.structures);
+  const half = world.span * 0.5;
+  if (Math.abs(worldX) > half || Math.abs(worldZ) > half) {
+    throw new RangeError('CRITICAL: Target coordinates are outside the diorama bounds.');
+  }
+  if (!VALID_TOOLS.includes(tool)) {
+    throw new TypeError(`CRITICAL: Invalid tool "${String(tool)}".`);
+  }
+
+  if (tool === 'track') return applyTrackTool(world, worldX, worldZ);
+  if (tool === 'demolish') return applyDemolishTool(world, worldX, worldZ);
+  return applyBuildingTool(world, worldX, worldZ, tool);
+}
+
+export function clearAllTracks(world: OrganicDioramaWorld): OrganicDioramaWorld {
+  validateWorld(world);
   return {
     ...world,
     trackPoints: [],
     trackClosed: false,
     splineSamples: [],
-    naturalProps: nextProps,
+    naturalProps: scatterDesertProps(world.span, world.seed, [], world.structures),
   };
 }

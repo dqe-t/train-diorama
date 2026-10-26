@@ -1,65 +1,91 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
-import { BufferAttribute, BufferGeometry, DoubleSide } from 'three';
 import {
-  computeTerrainVertexColor,
+  BufferAttribute,
+  BufferGeometry,
+  ClampToEdgeWrapping,
+  Color,
+  DataTexture,
+  DoubleSide,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  NoColorSpace,
+  RepeatWrapping,
+  RGBAFormat,
+  SRGBColorSpace,
+} from 'three';
+import { computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y } from '../core/desertPalette';
+import {
   hashCoords,
   sampleTerraformedHeight,
-  WATER_LEVEL_Y,
+  sampleWashFactor,
+  valueNoise2D,
 } from '../core/noise';
+import { generateGrainPixels, generateStrataPixels } from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
-import { NaturalProp, SplineSample } from '../types/diorama';
+import { SplineSample } from '../types/diorama';
+import { DesertPropItem } from './DesertFlora';
 
-const MESH_SEGMENTS = 84;
-const SKIRT_BOTTOM_Y = -0.55;
+const MESH_SEGMENTS = 128;
+const GRAIN_REPEAT = 7;
+const GRAIN_TEXTURE_SIZE = 256;
+
+interface TerrainGeometries {
+  readonly surfaceGeo: BufferGeometry;
+  readonly skirtGeo: BufferGeometry;
+}
 
 function buildSculptedTerrainGeometry(
   span: number,
   seed: number,
   splineSamples: ReadonlyArray<SplineSample>
-): { readonly surfaceGeo: BufferGeometry; readonly skirtGeo: BufferGeometry } {
+): TerrainGeometries {
   const half = span * 0.5;
+  const step = span / MESH_SEGMENTS;
   const vertsPerRow = MESH_SEGMENTS + 1;
-  const heights: number[][] = [];
 
+  const heights: number[][] = [];
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
     const row: number[] = [];
-    const wz = -half + (iz / MESH_SEGMENTS) * span;
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
-      const wx = -half + (ix / MESH_SEGMENTS) * span;
-      row.push(sampleTerraformedHeight(wx, wz, seed, splineSamples));
+      row.push(sampleTerraformedHeight(-half + ix * step, -half + iz * step, seed, splineSamples));
     }
     heights.push(row);
   }
 
-  const positions = new Float32Array(vertsPerRow * vertsPerRow * 3);
-  const colors = new Float32Array(vertsPerRow * vertsPerRow * 3);
-  const step = span / MESH_SEGMENTS;
+  const vertCount = vertsPerRow * vertsPerRow;
+  const positions = new Float32Array(vertCount * 3);
+  const colors = new Float32Array(vertCount * 3);
+  const uvs = new Float32Array(vertCount * 2);
+  const linear = new Color();
 
-  let ptr = 0;
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
     const wz = -half + iz * step;
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
       const wx = -half + ix * step;
       const h = heights[iz][ix];
-
       const hL = heights[iz][Math.max(0, ix - 1)];
       const hR = heights[iz][Math.min(MESH_SEGMENTS, ix + 1)];
       const hD = heights[Math.max(0, iz - 1)][ix];
       const hU = heights[Math.min(MESH_SEGMENTS, iz + 1)][ix];
       const slope = Math.hypot((hR - hL) / (2 * step), (hU - hD) / (2 * step));
 
-      const variation = hashCoords(ix, iz, seed + 77);
-      const [r, g, b] = computeTerrainVertexColor(h, slope, variation);
+      const grain =
+        valueNoise2D(wx * 3, wz * 3, seed + 77) * 0.6 + hashCoords(ix, iz, seed + 78) * 0.4;
+      const streak = valueNoise2D(wx * 5, wz * 5, seed + 13);
+      const [r, g, b] = computeTerrainVertexColor({
+        height: h,
+        slope,
+        grain,
+        streak,
+        washFactor: sampleWashFactor(wx, wz, seed),
+      });
+      linear.setRGB(r, g, b, SRGBColorSpace);
 
-      positions[ptr] = wx;
-      positions[ptr + 1] = h;
-      positions[ptr + 2] = wz;
-
-      colors[ptr] = r;
-      colors[ptr + 1] = g;
-      colors[ptr + 2] = b;
-      ptr += 3;
+      const vi = iz * vertsPerRow + ix;
+      positions.set([wx, h, wz], vi * 3);
+      colors.set([linear.r, linear.g, linear.b], vi * 3);
+      uvs.set([((wx + half) / span) * GRAIN_REPEAT, ((wz + half) / span) * GRAIN_REPEAT], vi * 2);
     }
   }
 
@@ -68,7 +94,7 @@ function buildSculptedTerrainGeometry(
     for (let ix = 0; ix < MESH_SEGMENTS; ix += 1) {
       const a = iz * vertsPerRow + ix;
       const b = a + 1;
-      const c = (iz + 1) * vertsPerRow + ix;
+      const c = a + vertsPerRow;
       const d = c + 1;
       indices.push(a, c, b, b, c, d);
     }
@@ -77,149 +103,71 @@ function buildSculptedTerrainGeometry(
   const surfaceGeo = new BufferGeometry();
   surfaceGeo.setAttribute('position', new BufferAttribute(positions, 3));
   surfaceGeo.setAttribute('color', new BufferAttribute(colors, 3));
+  surfaceGeo.setAttribute('uv', new BufferAttribute(uvs, 2));
   surfaceGeo.setIndex(indices);
   surfaceGeo.computeVertexNormals();
 
-  // Build Contoured Diorama Cross-Section Skirt Walls around all 4 edges
-  const skirtVerts: number[] = [];
+  // Contoured cutaway sides: strata texture is mapped by world height so bands match the cliffs
+  const skirtPos: number[] = [];
+  const skirtUv: number[] = [];
+  const strataRange = STRATA_TOP_Y - STRATA_BOTTOM_Y;
+  const vOf = (y: number): number => (y - STRATA_BOTTOM_Y) / strataRange;
+
   const addQuad = (
-    x0: number,
-    y0: number,
-    z0: number,
-    x1: number,
-    y1: number,
-    z1: number
+    x0: number, y0: number, z0: number, u0: number,
+    x1: number, y1: number, z1: number, u1: number
   ): void => {
-    skirtVerts.push(
-      x0, y0, z0,
-      x0, SKIRT_BOTTOM_Y, z0,
-      x1, y1, z1,
-      x1, y1, z1,
-      x0, SKIRT_BOTTOM_Y, z0,
-      x1, SKIRT_BOTTOM_Y, z1
-    );
+    const b = STRATA_BOTTOM_Y;
+    skirtPos.push(x0, y0, z0, x0, b, z0, x1, y1, z1, x1, y1, z1, x0, b, z0, x1, b, z1);
+    skirtUv.push(u0, vOf(y0), u0, 0, u1, vOf(y1), u1, vOf(y1), u0, 0, u1, 0);
   };
 
   for (let i = 0; i < MESH_SEGMENTS; i += 1) {
     const t0 = -half + i * step;
-    const t1 = -half + (i + 1) * step;
-    // South edge (+Z)
-    addQuad(t0, heights[MESH_SEGMENTS][i], half, t1, heights[MESH_SEGMENTS][i + 1], half);
-    // North edge (-Z)
-    addQuad(t1, heights[0][i + 1], -half, t0, heights[0][i], -half);
-    // East edge (+X)
-    addQuad(half, heights[i + 1][MESH_SEGMENTS], t1, half, heights[i][MESH_SEGMENTS], t0);
-    // West edge (-X)
-    addQuad(-half, heights[i][0], t0, -half, heights[i + 1][0], t1);
+    const t1 = t0 + step;
+    const u0 = ((t0 + half) / span) * 4;
+    const u1 = ((t1 + half) / span) * 4;
+    const last = MESH_SEGMENTS;
+    addQuad(t0, heights[last][i], half, u0, t1, heights[last][i + 1], half, u1);
+    addQuad(t1, heights[0][i + 1], -half, u1, t0, heights[0][i], -half, u0);
+    addQuad(half, heights[i + 1][last], t1, u1, half, heights[i][last], t0, u0);
+    addQuad(-half, heights[i][0], t0, u0, -half, heights[i + 1][0], t1, u1);
   }
 
   const skirtGeo = new BufferGeometry();
-  skirtGeo.setAttribute('position', new BufferAttribute(new Float32Array(skirtVerts), 3));
+  skirtGeo.setAttribute('position', new BufferAttribute(new Float32Array(skirtPos), 3));
+  skirtGeo.setAttribute('uv', new BufferAttribute(new Float32Array(skirtUv), 2));
   skirtGeo.computeVertexNormals();
 
   return { surfaceGeo, skirtGeo };
 }
 
-function OrganicFloraItem({ prop }: { readonly prop: NaturalProp }): React.JSX.Element {
-  const s = prop.scale;
-  if (prop.kind === 'pine') {
-    return (
-      <group
-        position={[prop.x, prop.y, prop.z]}
-        rotation={[0, prop.rotationY, 0]}
-        scale={[s, s, s]}
-      >
-        <mesh position={[0, 0.12, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.04, 0.055, 0.24, 6]} />
-          <meshStandardMaterial color="#69482e" roughness={0.9} />
-        </mesh>
-        <mesh position={[0, 0.34, 0]} castShadow receiveShadow>
-          <coneGeometry args={[0.25, 0.42, 7]} />
-          <meshStandardMaterial color="#356b3e" roughness={0.85} />
-        </mesh>
-        <mesh position={[0, 0.56, 0]} castShadow receiveShadow>
-          <coneGeometry args={[0.19, 0.36, 7]} />
-          <meshStandardMaterial color="#427d4b" roughness={0.85} />
-        </mesh>
-        <mesh position={[0, 0.74, 0]} castShadow receiveShadow>
-          <coneGeometry args={[0.12, 0.26, 7]} />
-          <meshStandardMaterial color="#508f59" roughness={0.85} />
-        </mesh>
-      </group>
-    );
-  }
+function createGrainTexture(seed: number): DataTexture {
+  const size = GRAIN_TEXTURE_SIZE;
+  const tex = new DataTexture(generateGrainPixels(size, seed), size, size, RGBAFormat);
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = RepeatWrapping;
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.colorSpace = NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
 
-  if (prop.kind === 'puff_tree' || prop.kind === 'autumn_tree') {
-    const crownColor =
-      prop.kind === 'autumn_tree'
-        ? prop.colorVariant % 2 === 0
-          ? '#df7a3e'
-          : '#e8a844'
-        : prop.colorVariant % 2 === 0
-          ? '#65b054'
-          : '#78bf64';
-
-    return (
-      <group
-        position={[prop.x, prop.y, prop.z]}
-        rotation={[0, prop.rotationY, 0]}
-        scale={[s, s, s]}
-      >
-        <mesh position={[0, 0.14, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.04, 0.06, 0.28, 6]} />
-          <meshStandardMaterial color="#704c32" roughness={0.9} />
-        </mesh>
-        <mesh position={[0, 0.38, 0]} castShadow receiveShadow>
-          <dodecahedronGeometry args={[0.24, 1]} />
-          <meshStandardMaterial color={crownColor} roughness={0.82} />
-        </mesh>
-        <mesh position={[0.12, 0.32, 0.08]} castShadow receiveShadow>
-          <dodecahedronGeometry args={[0.16, 1]} />
-          <meshStandardMaterial color={crownColor} roughness={0.82} />
-        </mesh>
-        <mesh position={[-0.1, 0.3, -0.09]} castShadow receiveShadow>
-          <dodecahedronGeometry args={[0.15, 1]} />
-          <meshStandardMaterial color={crownColor} roughness={0.82} />
-        </mesh>
-      </group>
-    );
-  }
-
-  if (prop.kind === 'bush') {
-    return (
-      <group
-        position={[prop.x, prop.y, prop.z]}
-        rotation={[0, prop.rotationY, 0]}
-        scale={[s, s, s]}
-      >
-        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-          <dodecahedronGeometry args={[0.13, 1]} />
-          <meshStandardMaterial color="#5ea34e" roughness={0.85} />
-        </mesh>
-        <mesh position={[0.09, 0.06, 0.05]} castShadow receiveShadow>
-          <dodecahedronGeometry args={[0.09, 1]} />
-          <meshStandardMaterial color="#72b860" roughness={0.85} />
-        </mesh>
-      </group>
-    );
-  }
-
-  return (
-    <group
-      position={[prop.x, prop.y, prop.z]}
-      rotation={[0.2, prop.rotationY, 0.1]}
-      scale={[s, s, s]}
-    >
-      <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-        <dodecahedronGeometry args={[0.18, 0]} />
-        <meshStandardMaterial color="#878a84" roughness={0.92} />
-      </mesh>
-      <mesh position={[0.14, 0.05, 0.08]} rotation={[0.4, 0.8, 0]} castShadow receiveShadow>
-        <dodecahedronGeometry args={[0.11, 0]} />
-        <meshStandardMaterial color="#757872" roughness={0.92} />
-      </mesh>
-    </group>
-  );
+function createStrataTexture(seed: number): DataTexture {
+  const width = 64;
+  const height = 256;
+  const tex = new DataTexture(generateStrataPixels(width, height, seed), width, height, RGBAFormat);
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = ClampToEdgeWrapping;
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 export function DioramaTerrain(): React.JSX.Element {
@@ -234,11 +182,23 @@ export function DioramaTerrain(): React.JSX.Element {
     (s): typeof s.interactAtWorldPoint => s.interactAtWorldPoint
   );
 
-  const { surfaceGeo, skirtGeo } = useMemo(
-    (): { readonly surfaceGeo: BufferGeometry; readonly skirtGeo: BufferGeometry } =>
+  const geometries = useMemo(
+    (): TerrainGeometries =>
       buildSculptedTerrainGeometry(world.span, world.seed, world.splineSamples),
     [world.span, world.seed, world.splineSamples]
   );
+  const grainTexture = useMemo((): DataTexture => createGrainTexture(world.seed), [world.seed]);
+  const strataTexture = useMemo((): DataTexture => createStrataTexture(world.seed), [world.seed]);
+
+  useEffect(
+    (): (() => void) => (): void => {
+      geometries.surfaceGeo.dispose();
+      geometries.skirtGeo.dispose();
+    },
+    [geometries]
+  );
+  useEffect((): (() => void) => (): void => grainTexture.dispose(), [grainTexture]);
+  useEffect((): (() => void) => (): void => strataTexture.dispose(), [strataTexture]);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
@@ -252,7 +212,10 @@ export function DioramaTerrain(): React.JSX.Element {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
     setHoverPoint({ x: e.point.x, y: e.point.y, z: e.point.z });
-    if (isPointerDragging && (activeTool === 'track' || activeTool === 'trees' || activeTool === 'demolish')) {
+    if (
+      isPointerDragging &&
+      (activeTool === 'track' || activeTool === 'trees' || activeTool === 'demolish')
+    ) {
       interactAtWorldPoint(e.point.x, e.point.z);
     }
   };
@@ -265,50 +228,36 @@ export function DioramaTerrain(): React.JSX.Element {
         setPointerDragging(false);
       }}
     >
-      {/* Carved Museum Walnut Tabletop Plinth */}
-      <mesh position={[0, -0.72, 0]} receiveShadow castShadow>
+      {/* Walnut display plinth */}
+      <mesh position={[0, STRATA_BOTTOM_Y - 0.17, 0]} receiveShadow castShadow>
         <boxGeometry args={[world.span + 0.65, 0.34, world.span + 0.65]} />
-        <meshStandardMaterial color="#4e3422" roughness={0.72} />
+        <meshStandardMaterial color="#3f2a1c" roughness={0.6} />
       </mesh>
 
-      {/* Contoured Earth Strata Cutaway Skirt */}
-      <mesh geometry={skirtGeo} receiveShadow castShadow>
-        <meshStandardMaterial color="#87664b" roughness={0.92} side={DoubleSide} />
+      {/* Strata cutaway sides */}
+      <mesh geometry={geometries.skirtGeo} receiveShadow castShadow>
+        <meshStandardMaterial map={strataTexture} roughness={0.95} side={DoubleSide} />
       </mesh>
 
-      {/* Continuous Sculpted 3D Landscape Surface */}
+      {/* Sculpted desert surface */}
       <mesh
-        geometry={surfaceGeo}
+        geometry={geometries.surfaceGeo}
         receiveShadow
         castShadow
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
       >
-        <meshStandardMaterial vertexColors roughness={0.86} flatShading />
-      </mesh>
-
-      {/* Translucent River & Lake Water Volume */}
-      <mesh
-        position={[0, (WATER_LEVEL_Y + SKIRT_BOTTOM_Y) * 0.5, 0]}
-        receiveShadow
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-      >
-        <boxGeometry
-          args={[world.span - 0.04, WATER_LEVEL_Y - SKIRT_BOTTOM_Y, world.span - 0.04]}
-        />
         <meshStandardMaterial
-          color="#46bac2"
-          transparent
-          opacity={0.76}
-          roughness={0.16}
-          metalness={0.1}
+          vertexColors
+          map={grainTexture}
+          bumpMap={grainTexture}
+          bumpScale={1.2}
+          roughness={0.96}
         />
       </mesh>
 
-      {/* Scattered Organic Trees, Bushes & Boulders */}
       {world.naturalProps.map((prop): React.JSX.Element => (
-        <OrganicFloraItem key={prop.id} prop={prop} />
+        <DesertPropItem key={prop.id} prop={prop} />
       ))}
     </group>
   );

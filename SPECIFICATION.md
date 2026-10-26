@@ -1,38 +1,36 @@
-# Tiny Rails Diorama — Technical & Product Specification (v2: Organic 3D & Splines)
+# Tiny Rails Diorama — Technical & Product Specification (v3: Wild West & Arches Desert)
 
 ## 1. Vision & Core Inspiration
-**Tiny Rails Diorama** is a cozy, tactile miniature train and village sandbox inspired by *Townscaper*, *Tiny Glade*, *Station to Station*, and hand-crafted museum railway dioramas. The world is a **sculpted, continuous 3D landscape slab** viewed from a single iconic isometric perspective, where clicking and dragging weaves smooth, sweeping spline railway tracks across rolling hills, alpine bluffs, and meandering river valleys.
+**Tiny Rails Diorama** is a tactile tabletop model railway diorama builder inspired by *Townscaper*, *Station to Station*, and the dramatic sandstone landscapes of the American Southwest (Utah’s *Arches National Park*, Monument Valley, and classic frontier narrow-gauge railroads). The world is presented as a **carved museum diorama block** with exposed horizontal rock strata, terraced sandstone cliffs, a dry arroyo (wash), flat sandy basins, and rugged frontier railway infrastructure.
 
 ---
 
-## 2. Core Design Pillars & Decisions
+## 2. Core Design Pillars & Architecture
 
-### 2.1. Fixed Isometric Perspective ("True Tabletop Diorama")
+### 2.1. Fixed Isometric Perspective & Museum Cutaway Plinth
 * **Projection:** True Orthographic projection (`<OrthographicCamera>` positioned at `[22, 22, 22]` looking at `[0, 0, 0]`).
-* **Rotation Lock:** Camera rotation is **strictly disabled** (`enableRotate={false}`).
-* **Contoured Cutaway Plinth:** The vertical sides of the diorama dynamically match the undulating perimeter height of the 3D terrain mesh down to a carved walnut base, looking like a real physical cross-section slice of earth.
+* **Rotation Lock:** Rotation is strictly disabled (`enableRotate={false}`). Smooth pan and clamped zoom (`26`–`68`) allow inspecting details while preserving the diorama composition.
+* **Geological Strata Cutaway:** The 4 vertical sides trace the contour of the terrain and are mapped with procedurally synthesized horizontal rock strata bands corresponding to real Colorado Plateau formations (Moenkopi, Entrada, and Navajo sandstone caps).
 
-### 2.2. Continuous Sculpted 3D Landscape & Real-Time Terraforming
-* **High-Resolution Terrain Mesh:** An $84 \times 84$ vertex `BufferGeometry` spanning $16 \times 16$ world units, displaced by multi-octave value noise, domain warping, and a sinusoidal river canyon.
-* **Vertex-Blended Biomes:** Smooth vertex color gradients transition organically from wet river sand to lush meadow greens, highland sage, steep rocky cliff faces (computed from surface slope), and snow-dusted peaks.
-* **Reactive Track Terraforming:**
-  * The terrain mesh dynamically queries distance to the railway spline.
-  * Across hills and slopes, the terrain smoothly flattens to meet the track bed elevation, automatically carving realistic **sloped cuttings** and **raised earth embankments** along the track corridor.
-  * Across rivers and deep basins, the riverbed remains submerged while the track spawns an **arched stone viaduct bridge**.
+### 2.2. Dramatic Desert Landscape & Terraforming
+* **Terraced Sandstone Mesas & Buttes:** Multi-tier step function creates sheer near-vertical cliffs interspersed with flat mesa tops.
+* **Flat Basin Floor:** A broad, gentle central basin accommodates frontier settlements, railway yards, and looping tracks without jagged terrain collisions.
+* **Dry Arroyo (Wash):** A winding dry riverbed carved through sandstone with pale sand and scattered gravel pebbles.
+* **Realistic Procedural Textures:**
+  * **Sand Grain & Bump Map:** Tileable periodic noise texture providing fine sand surface bump, specular highlights, and pebble speckles.
+  * **Strata UV Mapping:** Vertical cutaway skirts sample procedural strata bands indexed to world elevation.
+* **Dynamic Railway Grading:**
+  * Through mesas, tracks carve sloped rock cuttings down to grade.
+  * Over the dry wash, the ground remains depressed and the railway automatically spawns a timber trestle bridge.
 
-### 2.3. Organic Catmull-Rom Spline Tracks
-* **Gridless Free-Form Placement:**
-  * Clicking or dragging anywhere on the 3D terrain appends smooth 3D control points (`Vec3Point`) with automatic minimum-distance filtering and elevation grade smoothing.
-  * Control points can form either an open point-to-point line or a seamless closed loop.
-* **Continuous Procedural Geometry:**
-  * **Ballast Ribbon:** A custom continuous 3D mesh ribbon with sloped shoulders following the spline curve.
-  * **Dual Extruded Steel Rails:** Continuous 3D rail tubes offset by $\pm \frac{\text{gauge}}{2}$ along the curve's horizontal normal vector.
-  * **Tangent-Aligned Sleepers:** Wooden ties placed at uniform arc-length intervals perpendicular to the local spline tangent.
-  * **Curved Stone Viaducts:** Mason piers and bridge parapets automatically generated wherever the spline crosses water or deep valleys.
+### 2.3. Timber Trestle Bridges & Narrow-Gauge Tracks
+* **Continuous Spline Tracks:** Free-form `CatmullRomCurve3` with extruded steel rails and gravel ballast ribbon.
+* **Frontier Timber Trestles:** Wherever rails cross the dry wash or deep chasms, the system generates battered timber trestle bents with splayed upright posts, girts, cap beams, and wooden deck walkways.
 
-### 2.4. Free-Form Structures & Multi-Car Train Simulation
-* **World-Space Raycast Placement:**
-  * **Cottages:** Placed at exact 3D terrain coordinates; clicking near an existing cottage stacks an additional story (up to 3 stories).
-  * **Rural Stations:** Automatically rotate to align parallel to the nearest railway spline tangent.
-* **Multi-Carriage Spline Train:**
-  * A miniature steam locomotive, coal tender, and two passenger coaches traverse the arc-length parameterized spline with accurate 3D pitch, yaw, and rising steam puffs.
+### 2.4. Southwestern Architecture & Desert Props
+* **Adobe Pueblos:** Stackable Southwestern adobes with stepped back stories, projecting roof vigas, parapets, and wooden ladders.
+* **Frontier Depot:** Board-and-batten wooden depot with a passenger platform awning and an elevated timber water tower.
+* **Landmark Natural Arches & Desert Flora:**
+  * Saguaro cacti with multi-tier branching arms.
+  * Prickly-pear cacti, dusty sagebrush, gnarled pinon-juniper trees, and sandstone hoodoos.
+  * Weathered natural sandstone arches straddling scenic rock outcrops.

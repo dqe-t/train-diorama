@@ -1,5 +1,8 @@
 import { SplineSample, Vec3Point } from '../types/diorama';
-import { MIN_TRACK_Y, sampleNaturalTerrainHeight, WATER_LEVEL_Y } from './noise';
+import { MIN_TRACK_Y, sampleNaturalTerrainHeight } from './noise';
+
+/** Rail elevation above natural ground beyond which a timber trestle is built. */
+const BRIDGE_CLEARANCE = 0.22;
 
 function validatePointArray(points: ReadonlyArray<Vec3Point>): void {
   if (!Array.isArray(points)) {
@@ -159,11 +162,12 @@ export function buildSplineSamples(
     const pitchRadians = Math.asin(Math.max(-0.5, Math.min(0.5, ty)));
 
     const terrainY = sampleNaturalTerrainHeight(curr.x, curr.z, seed);
-    const isBridge = terrainY < WATER_LEVEL_Y + 0.06 || curr.y - terrainY > 0.24;
+    const trackY = Math.max(MIN_TRACK_Y, curr.y);
+    const isBridge = trackY - terrainY > BRIDGE_CLEARANCE;
 
     samples.push({
       x: curr.x,
-      y: Math.max(MIN_TRACK_Y, curr.y),
+      y: trackY,
       z: curr.z,
       tangentX: tx,
       tangentY: ty,

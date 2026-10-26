@@ -1,0 +1,56 @@
+import { describe, expect, it } from 'vitest';
+import {
+  computeTerrainVertexColor,
+  mixRgb,
+  strataColorAtHeight,
+  TerrainColorInput,
+} from '../src/core/desertPalette';
+import { PLAIN_Y } from '../src/core/noise';
+
+const BASE: TerrainColorInput = {
+  height: PLAIN_Y,
+  slope: 0.05,
+  grain: 0.5,
+  streak: 0.5,
+  washFactor: 0,
+};
+
+describe('desert palette & terrain vertex colors', (): void => {
+  it('returns distinct colors for basin floor, cliff faces and wash bed (Happy Path)', (): void => {
+    const floor = computeTerrainVertexColor(BASE);
+    const cliff = computeTerrainVertexColor({ ...BASE, height: 0.8, slope: 2.5 });
+    const wash = computeTerrainVertexColor({ ...BASE, height: 0.1, washFactor: 1 });
+
+    for (const c of [floor, cliff, wash]) {
+      expect(c.length).toBe(3);
+      c.forEach((ch): void => {
+        expect(ch).toBeGreaterThanOrEqual(0);
+        expect(ch).toBeLessThanOrEqual(1);
+      });
+    }
+    // Cliff strata are redder/darker than the dusty basin floor; wash is paler
+    expect(cliff[1]).toBeLessThan(floor[1]);
+    expect(wash[2]).toBeGreaterThan(floor[2]);
+  });
+
+  it('maps strata layers by elevation and mixes colors linearly (Happy Path)', (): void => {
+    const low = strataColorAtHeight(0.5);
+    const cap = strataColorAtHeight(2.0);
+    expect(cap[2]).toBeGreaterThan(low[2]); // cream Navajo cap vs chocolate Moenkopi
+    expect(mixRgb([0, 0, 0], [1, 1, 1], 0.5)).toEqual([0.5, 0.5, 0.5]);
+  });
+
+  it('throws RangeError for negative slope or out-of-range unit inputs (Failure Path 1)', (): void => {
+    expect((): unknown => computeTerrainVertexColor({ ...BASE, slope: -0.1 })).toThrow(RangeError);
+    expect((): unknown => computeTerrainVertexColor({ ...BASE, washFactor: 1.5 })).toThrow(RangeError);
+    expect((): unknown => computeTerrainVertexColor({ ...BASE, grain: -0.2 })).toThrow(RangeError);
+  });
+
+  it('throws TypeError for missing input or non-finite values (Failure Path 2)', (): void => {
+    expect((): unknown =>
+      computeTerrainVertexColor(null as unknown as TerrainColorInput)
+    ).toThrow(TypeError);
+    expect((): unknown => computeTerrainVertexColor({ ...BASE, height: Number.NaN })).toThrow(TypeError);
+    expect((): unknown => strataColorAtHeight(Number.POSITIVE_INFINITY)).toThrow(TypeError);
+  });
+});

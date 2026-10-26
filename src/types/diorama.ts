@@ -1,6 +1,6 @@
 export type ToolType = 'track' | 'cottage' | 'station' | 'trees' | 'demolish';
 
-export type PropKind = 'pine' | 'puff_tree' | 'autumn_tree' | 'rock' | 'bush';
+export type PropKind = 'saguaro' | 'sagebrush' | 'juniper' | 'boulder' | 'hoodoo' | 'arch';
 
 export type StructureKind = 'cottage' | 'station' | 'planted_trees';
 

@@ -1,8 +1,19 @@
 import { SplineSample } from '../types/diorama';
 
-export const WATER_LEVEL_Y = 0.22;
-export const MIN_TRACK_Y = 0.44;
 export const DIORAMA_SPAN = 16.0;
+/** Elevation of the flat desert basin floor. */
+export const PLAIN_Y = 0.42;
+/** Elevation of the dry arroyo (wash) bed. */
+export const WASH_BED_Y = 0.1;
+/** Lowest allowed rail-head elevation (keeps trestles above the wash). */
+export const MIN_TRACK_Y = 0.47;
+
+/** Mesa mask thresholds for each terraced cliff tier. */
+const MESA_THRESHOLDS: readonly [number, number, number] = [0.545, 0.625, 0.69];
+/** Height gained when crossing each cliff tier. */
+const MESA_TIER_HEIGHTS: readonly [number, number, number] = [0.5, 0.48, 0.42];
+/** Mask width over which a cliff rises (smaller = more vertical). */
+const CLIFF_SHARPNESS = 0.012;
 
 function validateFinite(value: number, name: string): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -21,9 +32,9 @@ export function hashCoords(x: number, z: number, seed: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
-function smoothstep(t: number): number {
-  const c = Math.max(0, Math.min(1, t));
-  return c * c * (3 - 2 * c);
+export function smoothRange(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -37,8 +48,8 @@ export function valueNoise2D(x: number, z: number, seed: number): number {
 
   const x0 = Math.floor(x);
   const z0 = Math.floor(z);
-  const sx = smoothstep(x - x0);
-  const sz = smoothstep(z - z0);
+  const sx = smoothRange(0, 1, x - x0);
+  const sz = smoothRange(0, 1, z - z0);
 
   const n00 = hashCoords(x0, z0, seed);
   const n10 = hashCoords(x0 + 1, z0, seed);
@@ -67,35 +78,68 @@ export function fractalNoise2D(x: number, z: number, seed: number): number {
   return sum / norm;
 }
 
+/** 0..~1 mask: high values become terraced mesas & buttes. */
+export function sampleMesaMask(worldX: number, worldZ: number, seed: number): number {
+  validateFinite(worldX, 'worldX');
+  validateFinite(worldZ, 'worldZ');
+  validateFinite(seed, 'seed');
+
+  const warpX = worldX + (valueNoise2D(worldX * 0.25, worldZ * 0.25, seed + 19) - 0.5) * 2.6;
+  const warpZ = worldZ + (valueNoise2D(worldX * 0.25, worldZ * 0.25, seed + 47) - 0.5) * 2.6;
+  let mask = fractalNoise2D(warpX * 1.1 + 40, warpZ * 1.1 + 40, seed + 5);
+
+  // Keep a broad, flat central basin for the town and rails
+  const radial = Math.hypot(worldX, worldZ);
+  mask -= 0.14 * (1 - smoothRange(2.5, 6.5, radial));
+
+  // Raise a rocky rim near the diorama edges for a framed canyon look
+  const edge = Math.max(Math.abs(worldX), Math.abs(worldZ));
+  mask += 0.12 * smoothRange(5.5, 8.0, edge);
+
+  return mask;
+}
+
+/** 0 = outside the dry wash, 1 = on the arroyo bed. */
+export function sampleWashFactor(worldX: number, worldZ: number, seed: number): number {
+  validateFinite(worldX, 'worldX');
+  validateFinite(worldZ, 'worldZ');
+  validateFinite(seed, 'seed');
+
+  const phase = (seed % 17) * 0.35;
+  const centerZ =
+    Math.sin(worldX * 0.3 + phase) * 2.6 +
+    Math.cos(worldX * 0.13 - phase) * 1.2 +
+    (valueNoise2D(worldX * 0.5, 3.0, seed + 61) - 0.5) * 1.0;
+  const width = 0.7 + valueNoise2D(worldX * 0.35, 7.0, seed + 88) * 0.45;
+  const dist = Math.abs(worldZ - centerZ);
+
+  return 1 - smoothRange(width * 0.55, width * 1.15, dist);
+}
+
 export function sampleNaturalTerrainHeight(worldX: number, worldZ: number, seed: number): number {
   validateFinite(worldX, 'worldX');
   validateFinite(worldZ, 'worldZ');
   validateFinite(seed, 'seed');
 
-  // Domain warp for organic hillside contours
-  const warpX = worldX + (valueNoise2D(worldX * 0.22, worldZ * 0.22, seed + 19) - 0.5) * 2.2;
-  const warpZ = worldZ + (valueNoise2D(worldX * 0.22, worldZ * 0.22, seed + 47) - 0.5) * 2.2;
+  // Flat desert floor with very gentle dune undulation
+  let height = PLAIN_Y + (valueNoise2D(worldX * 0.6, worldZ * 0.6, seed + 7) - 0.5) * 0.05;
 
-  const baseNoise = fractalNoise2D(warpX + 20, warpZ + 20, seed);
-  const ridgeNoise = Math.pow(fractalNoise2D(warpX * 0.9 - 10, warpZ * 0.9 + 15, seed + 311), 1.6);
-
-  // Sculpt rolling hills and a picturesque mountain corner
-  let elevation = 0.28 + baseNoise * 1.15 + ridgeNoise * 1.45;
-
-  // Carve an organic winding river valley across the landscape
-  const phase = (seed % 17) * 0.35;
-  const riverCenterZ =
-    Math.sin(worldX * 0.34 + phase) * 2.4 + Math.cos(worldX * 0.17 - phase) * 1.1;
-  const riverDist = Math.abs(worldZ - riverCenterZ);
-  const riverWidth = 1.55 + valueNoise2D(worldX * 0.3, worldZ * 0.3, seed + 88) * 0.65;
-
-  if (riverDist < riverWidth * 2.3) {
-    const bankBlend = smoothstep(riverDist / (riverWidth * 2.3));
-    const riverbedY = -0.18 + baseNoise * 0.14;
-    elevation = lerp(riverbedY, elevation, bankBlend);
+  // Terraced mesas: a soft talus apron, then near-vertical sandstone cliffs per tier
+  const mask = sampleMesaMask(worldX, worldZ, seed);
+  height += 0.12 * smoothRange(MESA_THRESHOLDS[0] - 0.08, MESA_THRESHOLDS[0], mask);
+  for (let tier = 0; tier < MESA_THRESHOLDS.length; tier += 1) {
+    const threshold = MESA_THRESHOLDS[tier];
+    height += MESA_TIER_HEIGHTS[tier] * smoothRange(threshold, threshold + CLIFF_SHARPNESS, mask);
   }
 
-  return elevation;
+  // Carve the dry arroyo — through mesas it becomes a slot canyon
+  const wash = sampleWashFactor(worldX, worldZ, seed);
+  if (wash > 0) {
+    const bedY = WASH_BED_Y + (valueNoise2D(worldX * 1.4, worldZ * 1.4, seed + 23) - 0.5) * 0.04;
+    height = lerp(height, bedY, wash);
+  }
+
+  return height;
 }
 
 export function sampleTerraformedHeight(
@@ -112,14 +156,12 @@ export function sampleTerraformedHeight(
   }
 
   const naturalY = sampleNaturalTerrainHeight(worldX, worldZ, seed);
-  if (naturalY < WATER_LEVEL_Y + 0.03 || splineSamples.length === 0) {
-    // Do not raise riverbed under water bridges; let viaduct piers span over water
+  if (splineSamples.length === 0) {
     return naturalY;
   }
 
   let minDistSq = Number.POSITIVE_INFINITY;
   let nearestTrackY = naturalY;
-
   for (let i = 0; i < splineSamples.length; i += 2) {
     const s = splineSamples[i];
     const dx = worldX - s.x;
@@ -136,47 +178,16 @@ export function sampleTerraformedHeight(
     return naturalY;
   }
 
-  const dist = Math.sqrt(minDistSq);
-  const innerRadius = 0.34;
-  const t = smoothstep((dist - innerRadius) / (corridorRadius - innerRadius));
+  const t = smoothRange(0.34, corridorRadius, Math.sqrt(minDistSq));
   const targetBedY = nearestTrackY - 0.03;
+  const fill = targetBedY - naturalY;
 
-  return lerp(targetBedY, naturalY, t);
-}
-
-export function computeTerrainVertexColor(
-  height: number,
-  slope: number,
-  variation: number
-): readonly [number, number, number] {
-  validateFinite(height, 'height');
-  validateFinite(slope, 'slope');
-  validateFinite(variation, 'variation');
-  if (slope < 0) {
-    throw new RangeError('CRITICAL: slope must be non-negative.');
+  if (fill <= 0) {
+    // Cutting: carve the hillside / mesa down to the track grade
+    return lerp(targetBedY, naturalY, t);
   }
 
-  // Submerged sand & wet riverbank
-  if (height < WATER_LEVEL_Y + 0.09) {
-    return [0.83, 0.75, 0.56];
-  }
-  // Steep rocky cliff faces
-  if (slope > 0.56) {
-    return [0.54, 0.53, 0.50];
-  }
-  // High alpine snow/rock peaks
-  if (height > 1.88) {
-    return [0.93, 0.95, 0.96];
-  }
-  if (height > 1.48) {
-    return [0.58, 0.61, 0.55];
-  }
-  // Highland sage green
-  if (height > 0.95) {
-    const v = (variation - 0.5) * 0.05;
-    return [0.42 + v, 0.63 + v, 0.35 + v];
-  }
-  // Lush spring meadow grass
-  const v = (variation - 0.5) * 0.06;
-  return [0.51 + v, 0.74 + v, 0.41 + v];
+  // Embankment: small gaps get filled, deep gaps fade out (trestle bridges span them)
+  const fillFade = 1 - smoothRange(0.1, 0.24, fill);
+  return naturalY + fill * (1 - t) * fillFade;
 }

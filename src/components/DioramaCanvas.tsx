@@ -11,9 +11,9 @@ import { MiniatureTrain } from './MiniatureTrain';
 export function DioramaCanvas(): React.JSX.Element {
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
 
-  const sunColor = goldenHour ? '#ffad66' : '#fff5e0';
-  const skyColor = goldenHour ? '#ffd5b8' : '#e8f4ff';
-  const groundBounce = goldenHour ? '#75533e' : '#8f7d65';
+  const sunColor = goldenHour ? '#ff9a52' : '#ffe9c7';
+  const skyColor = goldenHour ? '#ffc9a3' : '#d6e8f5';
+  const groundBounce = goldenHour ? '#8a4a2c' : '#b8784c';
 
   return (
     <Canvas shadows dpr={[1, 2]}>
@@ -41,21 +41,22 @@ export function DioramaCanvas(): React.JSX.Element {
         }}
       />
 
-      {/* Warm Miniature Diorama Lighting */}
-      <ambientLight intensity={goldenHour ? 0.55 : 0.72} color={skyColor} />
-      <hemisphereLight args={[skyColor, groundBounce, 0.55]} />
+      {/* Harsh desert sun with warm red-rock bounce light */}
+      <ambientLight intensity={goldenHour ? 0.35 : 0.42} color={skyColor} />
+      <hemisphereLight args={[skyColor, groundBounce, 0.6]} />
       <directionalLight
         castShadow
-        position={goldenHour ? [14, 15, 8] : [12, 24, 10]}
-        intensity={goldenHour ? 1.85 : 1.55}
+        position={goldenHour ? [16, 11, 6] : [10, 20, 7]}
+        intensity={goldenHour ? 2.2 : 2.3}
         color={sunColor}
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
         shadow-camera-left={-12}
         shadow-camera-right={12}
         shadow-camera-top={12}
         shadow-camera-bottom={-12}
-        shadow-bias={-0.0005}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.02}
       />
 
       <group position={[0, -0.3, 0]}>
