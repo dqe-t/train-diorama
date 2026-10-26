@@ -33,3 +33,16 @@
   * Saguaro cacti with multi-tier branching arms.
   * Prickly-pear cacti, dusty sagebrush, gnarled pinon-juniper trees, and sandstone hoodoos.
   * Weathered natural sandstone arches straddling scenic rock outcrops.
+
+### 2.5. Constant Physical Arc-Length Frame Distribution (Invariant Tie & Trestle Spacing)
+* **Problem Solved:** Track ties ("Querbalken") previously scaled with track length due to fixed sample counts ($N = 160$), resulting in cramped ties on short loops and sparse ties on extended routes.
+* **Constant Arc-Length Metric:** Spline arc lengths are computed numerically:
+  $$\Delta s_i = \sqrt{(x_{i+1} - x_i)^2 + (y_{i+1} - y_i)^2 + (z_{i+1} - z_i)^2}$$
+* **Invariant Physical Spacing:**
+  * **Railroad Ties / Sleepers:** Fixed at $\Delta s = 0.16\text{m}$ spacing along the entire track geometry.
+  * **Timber Trestle Bents & Cribbing Piers:** Placed at uniform $\Delta s = 0.52\text{m}$ intervals wherever terrain clearance necessitates substructures.
+  * Number of ties scales dynamically with length: $N_{\text{ties}} = \text{round}(L_{\text{total}} / 0.16\text{m})$, guaranteeing identical visual density across any route length.
+
+### 2.6. Photorealistic Diorama Textures
+* **Sedimentary Sandstone Strata (`public/textures/sandstone_strata.jpg`):** High-resolution Utah red rock cliff face texture displaying horizontal geological sedimentation, ochre/terracotta/salmon banding, and micro-fissures applied to the carved museum diorama skirt.
+* **Desert Sand & Arroyo Wash (`public/textures/desert_sand.jpg`):** Top-down seamless sand texture with natural ripples, fine pebbles, and gravel applied as surface color and micro bump map, composited with macro vertex coloring for natural geological variation.

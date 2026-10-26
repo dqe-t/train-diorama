@@ -3,6 +3,11 @@ import { BufferAttribute, BufferGeometry, DoubleSide } from 'three';
 import { useDioramaStore } from '../store/useDioramaStore';
 import { SplineSample } from '../types/diorama';
 import {
+  CONSTANT_SLEEPER_SPACING,
+  CONSTANT_TRESTLE_SPACING,
+  extractConstantDistanceFrames,
+} from '../core/trackGraph';
+import {
   TimberCribbingPier,
   TrestleBent,
   TRESTLE_WOOD_DARK,
@@ -197,21 +202,10 @@ function buildContinuousTrackMeshes(
   ballastGeo.setIndex(indices);
   ballastGeo.computeVertexNormals();
 
-  const sleeperSamples: SplineSample[] = [];
-  const trestleBents: SplineSample[] = [];
-  const cribbingPiers: SplineSample[] = [];
-
-  for (let i = 0; i < loopCount; i += 1) {
-    const s = samples[i];
-    sleeperSamples.push(s);
-    if (i % 3 === 0) {
-      if (s.supportTier === 'trestle') {
-        trestleBents.push(s);
-      } else if (s.supportTier === 'cribbing') {
-        cribbingPiers.push(s);
-      }
-    }
-  }
+  const sleeperSamples = extractConstantDistanceFrames(samples, closed, CONSTANT_SLEEPER_SPACING);
+  const supportFrames = extractConstantDistanceFrames(samples, closed, CONSTANT_TRESTLE_SPACING);
+  const trestleBents = supportFrames.filter((s): boolean => s.supportTier === 'trestle');
+  const cribbingPiers = supportFrames.filter((s): boolean => s.supportTier === 'cribbing');
 
   return {
     ballastGeo,

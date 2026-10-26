@@ -13,6 +13,8 @@ import {
   RepeatWrapping,
   RGBAFormat,
   SRGBColorSpace,
+  Texture,
+  TextureLoader,
 } from 'three';
 import { computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y } from '../core/desertPalette';
 import {
@@ -168,6 +170,32 @@ function createStrataTexture(seed: number): DataTexture {
   return tex;
 }
 
+function loadPhotorealisticStrataTexture(fallback: DataTexture): Texture {
+  if (typeof window === 'undefined') return fallback;
+  const loader = new TextureLoader();
+  const tex = loader.load('/textures/sandstone_strata.jpg');
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = ClampToEdgeWrapping;
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = SRGBColorSpace;
+  return tex;
+}
+
+function loadPhotorealisticSandTexture(fallback: DataTexture): Texture {
+  if (typeof window === 'undefined') return fallback;
+  const loader = new TextureLoader();
+  const tex = loader.load('/textures/desert_sand.jpg');
+  tex.wrapS = RepeatWrapping;
+  tex.wrapT = RepeatWrapping;
+  tex.magFilter = LinearFilter;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = SRGBColorSpace;
+  return tex;
+}
+
 export function DioramaTerrain(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const activeTool = useDioramaStore((s): typeof s.activeTool => s.activeTool);
@@ -184,8 +212,15 @@ export function DioramaTerrain(): React.JSX.Element {
     (): TerrainGeometries => buildSculptedTerrainGeometry(world.span, world.seed),
     [world.span, world.seed]
   );
-  const grainTexture = useMemo((): DataTexture => createGrainTexture(world.seed), [world.seed]);
-  const strataTexture = useMemo((): DataTexture => createStrataTexture(world.seed), [world.seed]);
+  const grainTexture = useMemo((): Texture => {
+    const procedural = createGrainTexture(world.seed);
+    return loadPhotorealisticSandTexture(procedural);
+  }, [world.seed]);
+
+  const strataTexture = useMemo((): Texture => {
+    const procedural = createStrataTexture(world.seed);
+    return loadPhotorealisticStrataTexture(procedural);
+  }, [world.seed]);
 
   useEffect(
     (): (() => void) => (): void => {
