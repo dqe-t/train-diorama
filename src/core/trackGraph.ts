@@ -92,18 +92,12 @@ export function relaxTrackPointHeights(
   seed: number
 ): ReadonlyArray<Vec3Point> {
   validatePointArray(points);
-  if (typeof closed !== 'boolean') {
-    throw new TypeError('CRITICAL: closed must be a boolean.');
-  }
+  if (typeof closed !== 'boolean') throw new TypeError('CRITICAL: closed must be a boolean.');
   if (typeof maxGrade !== 'number' || !Number.isFinite(maxGrade) || maxGrade <= 0) {
     throw new RangeError('CRITICAL: maxGrade must be a positive finite number.');
   }
-  if (!Number.isInteger(seed)) {
-    throw new TypeError('CRITICAL: seed must be an integer.');
-  }
-  if (points.length < 2) {
-    return points;
-  }
+  if (!Number.isInteger(seed)) throw new TypeError('CRITICAL: seed must be an integer.');
+  if (points.length < 2) return points;
 
   const n = points.length;
   const heights = points.map((p): number =>
@@ -111,38 +105,16 @@ export function relaxTrackPointHeights(
   );
 
   const segCount = closed ? n : n - 1;
-  for (let i = 0; i < segCount; i += 1) {
-    const nextIdx = (i + 1) % n;
-    const pA = points[i];
-    const pB = points[nextIdx];
-    for (let step = 1; step <= 3; step += 1) {
-      const f = step / 4;
-      const ground = sampleNaturalTerrainHeight(
-        pA.x + (pB.x - pA.x) * f,
-        pA.z + (pB.z - pA.z) * f,
-        seed
-      ) + TRACK_BED_OFFSET;
-      const nominalY = heights[i] + (heights[nextIdx] - heights[i]) * f;
-      if (nominalY < ground) {
-        const deficit = ground - nominalY;
-        heights[i] += deficit * (1 - f);
-        heights[nextIdx] += deficit * f;
-      }
-    }
-  }
-
-  for (let iter = 0; iter < 16; iter += 1) {
+  for (let iter = 0; iter < 12; iter += 1) {
     let changed = false;
     for (let i = 0; i < segCount; i += 1) {
       const j = (i + 1) % n;
-      const dist = Math.max(0.1, Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z));
-      const maxDelta = dist * maxGrade;
+      const maxDelta = Math.max(0.1, Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z)) * maxGrade;
       if (heights[i] < heights[j] - maxDelta) { heights[i] = heights[j] - maxDelta; changed = true; }
       if (heights[j] < heights[i] - maxDelta) { heights[j] = heights[i] - maxDelta; changed = true; }
     }
     if (!changed) break;
   }
-
   return points.map((p, idx): Vec3Point => ({ x: p.x, y: heights[idx], z: p.z }));
 }
 
@@ -246,9 +218,7 @@ export function buildSplineSamples(
   for (let i = 0; i <= sampleResolution; i += 1) {
     const targetDist = (i / sampleResolution) * totalLength;
     let idx = 0;
-    while (idx < cumLen.length - 2 && cumLen[idx + 1] < targetDist) {
-      idx += 1;
-    }
+    while (idx < cumLen.length - 2 && cumLen[idx + 1] < targetDist) idx += 1;
     const segLen = Math.max(1e-6, cumLen[idx + 1] - cumLen[idx]);
     const frac = (targetDist - cumLen[idx]) / segLen;
     const a = rawPts[idx];
@@ -260,20 +230,41 @@ export function buildSplineSamples(
     });
   }
 
-  const samples: SplineSample[] = [];
   const count = uniformPts.length;
+  const heights = uniformPts.map((p): number =>
+    Math.max(p.y, sampleNaturalTerrainHeight(p.x, p.z, seed) + TRACK_BED_OFFSET)
+  );
+
+  // Smooth grade relaxation along uniform points: caps slope to MAX_RAILWAY_GRADE
+  const loopLimit = closed ? count - 1 : count;
+  for (let iter = 0; iter < 10; iter += 1) {
+    for (let i = 0; i < loopLimit; i += 1) {
+      const nextIdx = closed ? (i + 1) % (count - 1) : Math.min(count - 1, i + 1);
+      const dist = Math.max(0.06, Math.hypot(uniformPts[i].x - uniformPts[nextIdx].x, uniformPts[i].z - uniformPts[nextIdx].z));
+      const maxDelta = dist * MAX_RAILWAY_GRADE;
+      if (heights[i] < heights[nextIdx] - maxDelta) heights[i] = heights[nextIdx] - maxDelta;
+      if (heights[nextIdx] < heights[i] - maxDelta) heights[nextIdx] = heights[i] - maxDelta;
+    }
+  }
+  if (closed && count > 1) {
+    heights[count - 1] = heights[0];
+  }
+
+  const samples: SplineSample[] = [];
 
   for (let i = 0; i < count; i += 1) {
     const curr = uniformPts[i];
-    const prev = closed
-      ? uniformPts[(i - 1 + count - 1) % (count - 1)]
-      : uniformPts[Math.max(0, i - 1)];
-    const next = closed
-      ? uniformPts[(i + 1) % (count - 1)]
-      : uniformPts[Math.min(count - 1, i + 1)];
+    const prevIdx = closed
+      ? (i - 1 + count - 1) % (count - 1)
+      : Math.max(0, i - 1);
+    const nextIdx = closed
+      ? (i + 1) % (count - 1)
+      : Math.min(count - 1, i + 1);
+    const prev = uniformPts[prevIdx];
+    const next = uniformPts[nextIdx];
 
     const dx = next.x - prev.x;
-    const dy = next.y - prev.y;
+    const dy = heights[nextIdx] - heights[prevIdx];
     const dz = next.z - prev.z;
     const len = Math.max(1e-6, Math.hypot(dx, dy, dz));
     const tx = dx / len;
@@ -287,7 +278,7 @@ export function buildSplineSamples(
     const pitchRadians = Math.asin(Math.max(-0.35, Math.min(0.35, ty)));
 
     const terrainY = sampleNaturalTerrainHeight(curr.x, curr.z, seed);
-    const trackY = curr.y;
+    const trackY = heights[i];
     const clearance = Math.max(0, trackY - terrainY);
     const supportTier = classifySupportTier(clearance);
 

@@ -47,9 +47,10 @@
 * **Sedimentary Sandstone Strata (`public/textures/sandstone_strata.jpg`):** High-resolution Utah red rock cliff face texture displaying horizontal geological sedimentation, ochre/terracotta/salmon banding, and micro-fissures applied to the carved museum diorama skirt.
 * **Desert Sand & Arroyo Wash (`public/textures/desert_sand.jpg`):** Top-down seamless sand texture with natural ripples, fine pebbles, and gravel applied as surface color and micro bump map, composited with macro vertex coloring for natural geological variation.
 
-### 2.7. Physical Based Rendering (PBR), IBL Lighting & Optical Tilt-Shift Post-Processing
+### 2.7. Physical Based Rendering (PBR), IBL Lighting & Pin-Sharp Orthographic Clarity
+* **Pin-Sharp Native Orthographic Clarity:** Post-processing blurring is completely disabled in favor of crystal-clear, high-DPI anti-aliased rendering across the entire diorama.
+* **Guaranteed Track-Over-Terrain Elevation:** Track elevations along every spline sample strictly enforce $y_i \ge \text{terrainY}_i + \text{TRACK\_BED\_OFFSET}$ followed by multi-pass grade smoothing ($14\%$). Tracks never clip through or get buried inside mountain cliffs or rock outcrops.
 * **Tangent-Space Normal Mapping:** Tangent-space normal map synthesis (`generateSandNormalPixels`) producing micro surface relief, sand ripples, and pebble boundaries reacting dynamically to oblique sunlight.
 * **Polished Steel Rails & Brass Fixtures:** Extruded steel rails configured with `metalness: 0.92`, `roughness: 0.2`, catching specular gleams from sunset IBL environment maps. Locomotive brass fittings (bell, roof trim) rendered with `metalness: 0.92`, `roughness: 0.16`.
 * **Atmospheric Train Lighting & Particles:** Working forward-facing incandescent locomotive spotlight casting real-time illuminated beams on tracks ahead, with synchronized steam puff particle puffs billowing from the smokestack.
 * **Museum Tabletop Presentation:** Polished dark walnut diorama plinth resting on an architectural studio tabletop with soft contact shadows (`<ContactShadows />`) grounding the display piece.
-* **Optical Tilt-Shift & Bloom Pipeline:** Native Three.js `EffectComposer` pipeline integrating two-pass horizontal and vertical tilt-shift depth-of-field shaders, specular highlight bloom (`UnrealBloomPass`), and ACES filmic color management.

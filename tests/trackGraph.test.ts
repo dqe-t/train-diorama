@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TRACK_BED_OFFSET } from '../src/core/noise';
 import {
   buildSplineSamples,
   classifySupportTier,
@@ -104,6 +105,20 @@ describe('Catmull-Rom spline evaluation & train pose interpolation', (): void =>
     expect(classifySupportTier(0.04)).toBe('flush');
     expect(classifySupportTier(0.2)).toBe('cribbing');
     expect(classifySupportTier(0.5)).toBe('trestle');
+  });
+
+  it('guarantees spline track elevation never dips into or clips inside natural terrain (Happy Path)', (): void => {
+    const loopPoints: ReadonlyArray<Vec3Point> = [
+      { x: -4, y: 0, z: -4 },
+      { x: 4, y: 0, z: -4 },
+      { x: 4, y: 0, z: 4 },
+      { x: -4, y: 0, z: 4 },
+    ];
+    const samples = buildSplineSamples(loopPoints, true, 4208, 64);
+    for (const s of samples) {
+      expect(s.y).toBeGreaterThanOrEqual(s.terrainY + TRACK_BED_OFFSET - 1e-4);
+      expect(s.clearance).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it('throws RangeError when fewer than 2 control points or invalid u parameter are provided (Failure Path 1)', (): void => {

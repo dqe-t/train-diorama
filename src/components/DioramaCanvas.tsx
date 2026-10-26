@@ -4,7 +4,6 @@ import { ContactShadows, Environment, MapControls, OrthographicCamera } from '@r
 import { ACESFilmicToneMapping, MOUSE } from 'three';
 import { STRATA_BOTTOM_Y } from '../core/desertPalette';
 import { useDioramaStore } from '../store/useDioramaStore';
-import { DioramaPostProcessing } from './DioramaPostProcessing';
 import { DioramaStructures } from './DioramaStructures';
 import { DioramaTerrain } from './DioramaTerrain';
 import { DioramaTracks } from './DioramaTracks';
@@ -98,9 +97,6 @@ export function DioramaCanvas(): React.JSX.Element {
         <DioramaStructures />
         <MiniatureTrain />
       </group>
-
-      {/* Macro Tilt-Shift & Bloom Optical Pipeline */}
-      <DioramaPostProcessing />
     </Canvas>
   );
 }
