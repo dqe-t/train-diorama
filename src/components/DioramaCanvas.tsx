@@ -1,6 +1,12 @@
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
-import { ContactShadows, Environment, MapControls, OrthographicCamera } from '@react-three/drei';
+import {
+  ContactShadows,
+  Environment,
+  MapControls,
+  OrthographicCamera,
+  SoftShadows,
+} from '@react-three/drei';
 import { ACESFilmicToneMapping, MOUSE } from 'three';
 import { STRATA_BOTTOM_Y } from '../core/desertPalette';
 import { useDioramaStore } from '../store/useDioramaStore';
@@ -9,13 +15,17 @@ import { DioramaTerrain } from './DioramaTerrain';
 import { DioramaTracks } from './DioramaTracks';
 import { MiniatureTrain } from './MiniatureTrain';
 
+/** Bottom of the layered display plinth (see DioramaTerrain). */
+const PLINTH_BOTTOM_Y = STRATA_BOTTOM_Y - 0.38;
+
 export function DioramaCanvas(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
 
-  const sunColor = goldenHour ? '#ff9a52' : '#ffe9c7';
-  const skyColor = goldenHour ? '#ffc9a3' : '#d6e8f5';
-  const groundBounce = goldenHour ? '#8a4a2c' : '#b8784c';
+  // Warm studio lighting: low key light from the back-left so cliffs cast long soft shadows
+  const sunColor = goldenHour ? '#ffab6b' : '#fff1dc';
+  const skyColor = goldenHour ? '#ffd2b0' : '#ffe9d6';
+  const groundBounce = goldenHour ? '#9a4a28' : '#c0653a';
 
   return (
     <Canvas
@@ -23,9 +33,12 @@ export function DioramaCanvas(): React.JSX.Element {
       dpr={[1, 2]}
       gl={{
         toneMapping: ACESFilmicToneMapping,
-        toneMappingExposure: goldenHour ? 1.15 : 1.05,
+        toneMappingExposure: goldenHour ? 1.1 : 1.0,
       }}
     >
+      {/* Percentage-closer soft shadows: soft penumbras like a studio-lit clay model */}
+      <SoftShadows size={28} samples={14} focus={0.4} />
+
       {/* Strictly Fixed Isometric Orthographic Camera */}
       <OrthographicCamera
         makeDefault
@@ -50,46 +63,45 @@ export function DioramaCanvas(): React.JSX.Element {
         }}
       />
 
-      {/* Desert Environment IBL Reflection Map */}
-      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.85 : 0.65} />
+      {/* Gentle environment fill for soft matte shading */}
+      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.55 : 0.45} />
 
-      {/* Harsh desert sun with warm red-rock bounce light */}
-      <ambientLight intensity={goldenHour ? 0.32 : 0.38} color={skyColor} />
-      <hemisphereLight args={[skyColor, groundBounce, 0.55]} />
+      <ambientLight intensity={goldenHour ? 0.22 : 0.26} color={skyColor} />
+      <hemisphereLight args={[skyColor, groundBounce, 0.65]} />
       <directionalLight
         castShadow
-        position={goldenHour ? [16, 11, 6] : [10, 20, 7]}
-        intensity={goldenHour ? 2.3 : 2.4}
+        position={goldenHour ? [-15, 9, 7] : [-11, 17, 9]}
+        intensity={goldenHour ? 2.6 : 2.5}
         color={sunColor}
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-camera-left={-12}
         shadow-camera-right={12}
         shadow-camera-top={12}
         shadow-camera-bottom={-12}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.02}
+        shadow-camera-near={0.5}
+        shadow-camera-far={60}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.03}
       />
+      {/* Weak warm rim light from the front-right to lift the shadow side of cliffs */}
+      <directionalLight position={[12, 6, 10]} intensity={0.35} color="#ffc49a" />
 
       <group position={[0, -0.3, 0]}>
-        {/* Soft Ambient Contact Shadows beneath the Plinth */}
+        {/* Soft ambient contact shadow beneath the plinth */}
         <ContactShadows
-          position={[0, STRATA_BOTTOM_Y - 0.34, 0]}
-          opacity={0.65}
-          scale={world.span * 1.5}
-          blur={2.4}
+          position={[0, PLINTH_BOTTOM_Y - 0.005, 0]}
+          opacity={0.7}
+          scale={world.span * 1.6}
+          blur={2.6}
           far={3.5}
-          color="#160c06"
+          color="#0d0806"
         />
 
-        {/* Studio Museum Tabletop Desk */}
-        <mesh
-          position={[0, STRATA_BOTTOM_Y - 0.35, 0]}
-          rotation={[-Math.PI * 0.5, 0, 0]}
-          receiveShadow
-        >
+        {/* Dark studio tabletop */}
+        <mesh position={[0, PLINTH_BOTTOM_Y - 0.01, 0]} rotation={[-Math.PI * 0.5, 0, 0]} receiveShadow>
           <planeGeometry args={[world.span * 3.5, world.span * 3.5]} />
-          <meshStandardMaterial color="#1a1410" roughness={0.65} metalness={0.08} />
+          <meshStandardMaterial color="#18181a" roughness={0.85} metalness={0} />
         </mesh>
 
         <DioramaTerrain />

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeCavityOcclusion,
   computeTerrainVertexColor,
   mixRgb,
   strataColorAtHeight,
@@ -52,5 +53,21 @@ describe('desert palette & terrain vertex colors', (): void => {
     ).toThrow(TypeError);
     expect((): unknown => computeTerrainVertexColor({ ...BASE, height: Number.NaN })).toThrow(TypeError);
     expect((): unknown => strataColorAtHeight(Number.POSITIVE_INFINITY)).toThrow(TypeError);
+  });
+
+  it('darkens concave cliff feet and slightly brightens convex rims (Happy Path)', (): void => {
+    const flat = computeCavityOcclusion(0.5, 0.5, 0.4);
+    const cliffFoot = computeCavityOcclusion(0.4, 1.0, 0.4);
+    const rim = computeCavityOcclusion(1.2, 0.8, 0.4);
+    expect(flat).toBeCloseTo(1, 5);
+    expect(cliffFoot).toBeCloseTo(0.6, 5);
+    expect(rim).toBeGreaterThan(1);
+    expect(rim).toBeLessThanOrEqual(1.05);
+  });
+
+  it('throws on invalid cavity occlusion inputs (Failure Paths)', (): void => {
+    expect((): number => computeCavityOcclusion(Number.NaN, 0, 0.4)).toThrow(TypeError);
+    expect((): number => computeCavityOcclusion(0, 0, 1.5)).toThrow(RangeError);
+    expect((): number => computeCavityOcclusion(0, 0, -0.1)).toThrow(RangeError);
   });
 });

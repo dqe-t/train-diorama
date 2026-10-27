@@ -93,8 +93,8 @@ export function generateStrataPixels(width: number, height: number, seed: number
 }
 
 /**
- * Tangent-space normal map generated from periodic sand grain noise.
- * Encodes [Nx, Ny, Nz] in [R, G, B] as [0..255] with seamless wrap-around tiling.
+ * Tangent-space normal map of soft, wind-blown dune ripples (seamlessly tiling).
+ * Encodes [Nx, Ny, Nz] in [R, G, B] as [0..255].
  */
 export function generateSandNormalPixels(size: number, seed: number, strength: number): Uint8Array {
   validatePowerOfTwo(size, 'size');
@@ -106,12 +106,13 @@ export function generateSandNormalPixels(size: number, seed: number, strength: n
   const heightField = new Float32Array(size * size);
   for (let py = 0; py < size; py += 1) {
     for (let px = 0; px < size; px += 1) {
-      const medium = periodicValueNoise((px / size) * 8, (py / size) * 8, 8, seed);
-      const fine = hashCoords(px, py, seed + 7);
-      let v = medium * 0.7 + fine * 0.3;
-      if (fine > 0.985) v -= 0.35; // recessed pebble edges
-      if (fine < 0.012) v += 0.25; // raised sand crests
-      heightField[py * size + px] = v;
+      const u = px / size;
+      const w = py / size;
+      // Integer cycle count + periodic warp keeps the ripples tileable
+      const warp = (periodicValueNoise(u * 4, w * 4, 4, seed) - 0.5) * 4.0;
+      const ripple = 0.5 + 0.5 * Math.sin(Math.PI * 2 * (w * 6 + u * 1) + warp);
+      const swell = periodicValueNoise(u * 2, w * 2, 2, seed + 7);
+      heightField[py * size + px] = ripple * 0.75 + swell * 0.25;
     }
   }
 

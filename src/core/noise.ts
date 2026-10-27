@@ -13,7 +13,7 @@ export const MESA_THRESHOLDS: readonly [number, number] = [0.46, 0.68];
 /** Height gained when crossing each cliff tier (Tier 1 rises +0.78m, Tier 2 rises +0.86m). */
 export const MESA_TIER_HEIGHTS: readonly [number, number] = [0.78, 0.86];
 /** Mask width over which a cliff rises (smaller = more vertical). */
-const CLIFF_SHARPNESS = 0.012;
+const CLIFF_SHARPNESS = 0.026;
 
 function validateFinite(value: number, name: string): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) {

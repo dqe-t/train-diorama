@@ -54,6 +54,11 @@
 * **Desert Sand & Arroyo Wash (`public/textures/desert_sand.jpg`):** Top-down seamless sand texture with natural ripples, fine pebbles, and gravel applied as surface color and micro bump map, composited with macro vertex coloring for natural geological variation.
 
 ### 2.7. Physical Based Rendering (PBR), IBL Lighting & Pin-Sharp Orthographic Clarity
+* **Soft "Modelling Clay" Visual Style:** Smooth, matte terracotta surfaces with no photo textures, speckle, or vertical varnish streaks. Cliffs show wide, low-contrast horizontal strata bands; the dry wash is a pale sandy path; flat sand carries a subtle dune-ripple normal map.
+* **Baked Cavity Occlusion:** Per-vertex ambient occlusion (`computeCavityOcclusion`) darkens cliff feet and wash banks and slightly brightens convex rims, so the scene reads like a sculpted clay model.
+* **Rounded Clay Cliffs:** Wider cliff transitions (`CLIFF_SHARPNESS = 0.026`) on a 192×192 terrain mesh give soft, rounded mesa lips.
+* **Soft Studio Lighting:** PCSS soft shadows (`<SoftShadows />`), a low warm key light from the back-left casting long soft shadows, a warm front-right rim light, and a reduced environment fill.
+* **Layered Display Plinth:** A thin terracotta slab on top of a dark rounded plinth (`RoundedBox`) on a dark tabletop.
 * **Pin-Sharp Native Orthographic Clarity:** Post-processing blurring is completely disabled in favor of crystal-clear, high-DPI anti-aliased rendering across the entire diorama.
 * **Guaranteed Track-Over-Terrain Elevation:** Track elevations along every spline sample strictly enforce $y_i \ge \text{terrainY}_i + \text{TRACK\_BED\_OFFSET}$ followed by multi-pass grade smoothing ($14\%$). Tracks never clip through or get buried inside mountain cliffs or rock outcrops.
 * **Tangent-Space Normal Mapping:** Tangent-space normal map synthesis (`generateSandNormalPixels`) producing micro surface relief, sand ripples, and pebble boundaries reacting dynamically to oblique sunlight.

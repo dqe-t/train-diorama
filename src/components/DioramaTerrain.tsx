@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
+import { RoundedBox } from '@react-three/drei';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -9,45 +10,39 @@ import {
   DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
-  NoColorSpace,
   RepeatWrapping,
   RGBAFormat,
   SRGBColorSpace,
-  Texture,
-  TextureLoader,
   Vector2,
 } from 'three';
-import { computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y } from '../core/desertPalette';
 import {
-  hashCoords,
-  sampleNaturalTerrainHeight,
-  sampleWashFactor,
-  valueNoise2D,
-} from '../core/noise';
-import {
-  generateGrainPixels,
-  generateSandNormalPixels,
-  generateStrataPixels,
-} from '../core/textureSynthesis';
+  computeCavityOcclusion,
+  computeTerrainVertexColor,
+  STRATA_BOTTOM_Y,
+  STRATA_TOP_Y,
+} from '../core/desertPalette';
+import { sampleNaturalTerrainHeight, sampleWashFactor, valueNoise2D } from '../core/noise';
+import { generateSandNormalPixels, generateStrataPixels } from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
 import { DesertPropItem } from './DesertFlora';
 
-const MESH_SEGMENTS = 128;
-const GRAIN_REPEAT = 7;
-const GRAIN_TEXTURE_SIZE = 256;
+const MESH_SEGMENTS = 192;
+const RIPPLE_REPEAT = 6;
+const RIPPLE_TEXTURE_SIZE = 256;
+/** Neighborhood radius (in grid cells) used for baked cavity occlusion. */
+const AO_RADIUS = 4;
+const AO_STRENGTH = 0.38;
 
 interface TerrainGeometries {
   readonly surfaceGeo: BufferGeometry;
   readonly skirtGeo: BufferGeometry;
 }
 
-function buildSculptedTerrainGeometry(
-  span: number,
-  seed: number
-): TerrainGeometries {
+function buildSculptedTerrainGeometry(span: number, seed: number): TerrainGeometries {
   const half = span * 0.5;
   const step = span / MESH_SEGMENTS;
   const vertsPerRow = MESH_SEGMENTS + 1;
+  const last = MESH_SEGMENTS;
 
   const heights: number[][] = [];
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
@@ -57,40 +52,45 @@ function buildSculptedTerrainGeometry(
     }
     heights.push(row);
   }
+  const hAt = (ix: number, iz: number): number =>
+    heights[Math.max(0, Math.min(last, iz))][Math.max(0, Math.min(last, ix))];
 
   const vertCount = vertsPerRow * vertsPerRow;
   const positions = new Float32Array(vertCount * 3);
   const colors = new Float32Array(vertCount * 3);
   const uvs = new Float32Array(vertCount * 2);
   const linear = new Color();
+  const r = AO_RADIUS;
 
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
     const wz = -half + iz * step;
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
       const wx = -half + ix * step;
       const h = heights[iz][ix];
-      const hL = heights[iz][Math.max(0, ix - 1)];
-      const hR = heights[iz][Math.min(MESH_SEGMENTS, ix + 1)];
-      const hD = heights[Math.max(0, iz - 1)][ix];
-      const hU = heights[Math.min(MESH_SEGMENTS, iz + 1)][ix];
-      const slope = Math.hypot((hR - hL) / (2 * step), (hU - hD) / (2 * step));
+      const slope = Math.hypot(
+        (hAt(ix + 1, iz) - hAt(ix - 1, iz)) / (2 * step),
+        (hAt(ix, iz + 1) - hAt(ix, iz - 1)) / (2 * step)
+      );
 
-      const grain =
-        valueNoise2D(wx * 3, wz * 3, seed + 77) * 0.6 + hashCoords(ix, iz, seed + 78) * 0.4;
-      const streak = valueNoise2D(wx * 5, wz * 5, seed + 13);
-      const [r, g, b] = computeTerrainVertexColor({
+      const [cr, cg, cb] = computeTerrainVertexColor({
         height: h,
         slope,
-        grain,
-        streak,
+        grain: valueNoise2D(wx * 1.2, wz * 1.2, seed + 77),
+        streak: valueNoise2D(wx * 2, wz * 2, seed + 13),
         washFactor: sampleWashFactor(wx, wz, seed),
       });
-      linear.setRGB(r, g, b, SRGBColorSpace);
+
+      const neighborhood =
+        (hAt(ix - r, iz) + hAt(ix + r, iz) + hAt(ix, iz - r) + hAt(ix, iz + r) +
+          hAt(ix - r, iz - r) + hAt(ix + r, iz + r) + hAt(ix - r, iz + r) + hAt(ix + r, iz - r)) /
+        8;
+      const ao = computeCavityOcclusion(h, neighborhood, AO_STRENGTH);
+      linear.setRGB(cr * ao, cg * ao, cb * ao, SRGBColorSpace);
 
       const vi = iz * vertsPerRow + ix;
       positions.set([wx, h, wz], vi * 3);
       colors.set([linear.r, linear.g, linear.b], vi * 3);
-      uvs.set([((wx + half) / span) * GRAIN_REPEAT, ((wz + half) / span) * GRAIN_REPEAT], vi * 2);
+      uvs.set([((wx + half) / span) * RIPPLE_REPEAT, ((wz + half) / span) * RIPPLE_REPEAT], vi * 2);
     }
   }
 
@@ -132,7 +132,6 @@ function buildSculptedTerrainGeometry(
     const t1 = t0 + step;
     const u0 = ((t0 + half) / span) * 4;
     const u1 = ((t1 + half) / span) * 4;
-    const last = MESH_SEGMENTS;
     addQuad(t0, heights[last][i], half, u0, t1, heights[last][i + 1], half, u1);
     addQuad(t1, heights[0][i + 1], -half, u1, t0, heights[0][i], -half, u0);
     addQuad(half, heights[i + 1][last], t1, u1, half, heights[i][last], t0, u0);
@@ -145,20 +144,6 @@ function buildSculptedTerrainGeometry(
   skirtGeo.computeVertexNormals();
 
   return { surfaceGeo, skirtGeo };
-}
-
-function createGrainTexture(seed: number): DataTexture {
-  const size = GRAIN_TEXTURE_SIZE;
-  const tex = new DataTexture(generateGrainPixels(size, seed), size, size, RGBAFormat);
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = RepeatWrapping;
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 4;
-  tex.colorSpace = NoColorSpace;
-  tex.needsUpdate = true;
-  return tex;
 }
 
 function createStrataTexture(seed: number): DataTexture {
@@ -175,9 +160,9 @@ function createStrataTexture(seed: number): DataTexture {
   return tex;
 }
 
-function createSandNormalTexture(seed: number): DataTexture {
-  const size = GRAIN_TEXTURE_SIZE;
-  const tex = new DataTexture(generateSandNormalPixels(size, seed, 2.2), size, size, RGBAFormat);
+function createRippleNormalTexture(seed: number): DataTexture {
+  const size = RIPPLE_TEXTURE_SIZE;
+  const tex = new DataTexture(generateSandNormalPixels(size, seed, 3.0), size, size, RGBAFormat);
   tex.wrapS = RepeatWrapping;
   tex.wrapT = RepeatWrapping;
   tex.magFilter = LinearFilter;
@@ -185,32 +170,6 @@ function createSandNormalTexture(seed: number): DataTexture {
   tex.generateMipmaps = true;
   tex.anisotropy = 4;
   tex.needsUpdate = true;
-  return tex;
-}
-
-function loadPhotorealisticStrataTexture(fallback: DataTexture): Texture {
-  if (typeof window === 'undefined') return fallback;
-  const loader = new TextureLoader();
-  const tex = loader.load('/textures/sandstone_strata.jpg');
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = ClampToEdgeWrapping;
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.colorSpace = SRGBColorSpace;
-  return tex;
-}
-
-function loadPhotorealisticSandTexture(fallback: DataTexture): Texture {
-  if (typeof window === 'undefined') return fallback;
-  const loader = new TextureLoader();
-  const tex = loader.load('/textures/desert_sand.jpg');
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = RepeatWrapping;
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.colorSpace = SRGBColorSpace;
   return tex;
 }
 
@@ -230,20 +189,12 @@ export function DioramaTerrain(): React.JSX.Element {
     (): TerrainGeometries => buildSculptedTerrainGeometry(world.span, world.seed),
     [world.span, world.seed]
   );
-  const grainTexture = useMemo((): Texture => {
-    const procedural = createGrainTexture(world.seed);
-    return loadPhotorealisticSandTexture(procedural);
-  }, [world.seed]);
-
-  const sandNormalTexture = useMemo(
-    (): DataTexture => createSandNormalTexture(world.seed),
+  const rippleTexture = useMemo(
+    (): DataTexture => createRippleNormalTexture(world.seed),
     [world.seed]
   );
-
-  const strataTexture = useMemo((): Texture => {
-    const procedural = createStrataTexture(world.seed);
-    return loadPhotorealisticStrataTexture(procedural);
-  }, [world.seed]);
+  const strataTexture = useMemo((): DataTexture => createStrataTexture(world.seed), [world.seed]);
+  const normalScale = useMemo((): Vector2 => new Vector2(0.55, 0.55), []);
 
   useEffect(
     (): (() => void) => (): void => {
@@ -252,8 +203,7 @@ export function DioramaTerrain(): React.JSX.Element {
     },
     [geometries]
   );
-  useEffect((): (() => void) => (): void => grainTexture.dispose(), [grainTexture]);
-  useEffect((): (() => void) => (): void => sandNormalTexture.dispose(), [sandNormalTexture]);
+  useEffect((): (() => void) => (): void => rippleTexture.dispose(), [rippleTexture]);
   useEffect((): (() => void) => (): void => strataTexture.dispose(), [strataTexture]);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>): void => {
@@ -276,8 +226,6 @@ export function DioramaTerrain(): React.JSX.Element {
     }
   };
 
-  const normalScale = useMemo((): Vector2 => new Vector2(0.85, 0.85), []);
-
   return (
     <group
       onPointerUp={(): void => setPointerDragging(false)}
@@ -286,29 +234,39 @@ export function DioramaTerrain(): React.JSX.Element {
         setPointerDragging(false);
       }}
     >
-      {/* Polished walnut museum display plinth */}
-      <mesh position={[0, STRATA_BOTTOM_Y - 0.17, 0]} receiveShadow castShadow>
-        <boxGeometry args={[world.span + 0.65, 0.34, world.span + 0.65]} />
-        <meshStandardMaterial
-          color="#2a1a0f"
-          roughness={0.38}
-          metalness={0.12}
-          envMapIntensity={1.3}
-        />
-      </mesh>
+      {/* Layered clay base: a soft lighter slab on top of a dark rounded display plinth */}
+      <RoundedBox
+        args={[world.span + 0.3, 0.16, world.span + 0.3]}
+        radius={0.07}
+        smoothness={4}
+        position={[0, STRATA_BOTTOM_Y - 0.08, 0]}
+        receiveShadow
+        castShadow
+      >
+        <meshStandardMaterial color="#c9774a" roughness={0.95} envMapIntensity={0.4} />
+      </RoundedBox>
+      <RoundedBox
+        args={[world.span + 0.6, 0.22, world.span + 0.6]}
+        radius={0.09}
+        smoothness={4}
+        position={[0, STRATA_BOTTOM_Y - 0.27, 0]}
+        receiveShadow
+        castShadow
+      >
+        <meshStandardMaterial color="#2a2522" roughness={0.75} envMapIntensity={0.5} />
+      </RoundedBox>
 
-      {/* Strata cutaway sides */}
+      {/* Soft clay strata cutaway sides */}
       <mesh geometry={geometries.skirtGeo} receiveShadow castShadow>
         <meshStandardMaterial
           map={strataTexture}
-          roughness={0.88}
-          metalness={0.03}
-          envMapIntensity={0.7}
+          roughness={0.95}
+          envMapIntensity={0.45}
           side={DoubleSide}
         />
       </mesh>
 
-      {/* Sculpted desert surface with normal relief */}
+      {/* Sculpted clay desert surface with gentle dune ripples */}
       <mesh
         geometry={geometries.surfaceGeo}
         receiveShadow
@@ -318,12 +276,11 @@ export function DioramaTerrain(): React.JSX.Element {
       >
         <meshStandardMaterial
           vertexColors
-          map={grainTexture}
-          normalMap={sandNormalTexture}
+          normalMap={rippleTexture}
           normalScale={normalScale}
-          roughness={0.92}
-          metalness={0.03}
-          envMapIntensity={0.65}
+          roughness={0.93}
+          metalness={0}
+          envMapIntensity={0.45}
         />
       </mesh>
 

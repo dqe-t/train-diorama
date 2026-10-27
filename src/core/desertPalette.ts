@@ -16,27 +16,25 @@ interface StrataLayer {
  * Colorado-Plateau-inspired rock column (bottom → top):
  * dark basement, pale shale, chocolate Moenkopi, salmon Entrada, cream Navajo cap.
  */
+/** Soft terracotta "modelling clay" strata: low contrast, wide bands, no harsh streaks. */
 const STRATA_LAYERS: ReadonlyArray<StrataLayer> = [
-  { top: -0.2, color: [0.37, 0.23, 0.16] },
-  { top: 0.05, color: [0.49, 0.27, 0.19] },
-  { top: 0.18, color: [0.66, 0.47, 0.34] },
-  { top: 0.42, color: [0.55, 0.3, 0.2] },
-  { top: 0.62, color: [0.56, 0.29, 0.18] },
-  { top: 0.72, color: [0.68, 0.38, 0.23] },
-  { top: 0.92, color: [0.6, 0.31, 0.19] },
-  { top: 1.18, color: [0.77, 0.4, 0.24] },
-  { top: 1.3, color: [0.83, 0.53, 0.34] },
-  { top: 1.44, color: [0.74, 0.38, 0.22] },
-  { top: Number.POSITIVE_INFINITY, color: [0.9, 0.81, 0.64] },
+  { top: -0.2, color: [0.5, 0.27, 0.18] },
+  { top: 0.1, color: [0.64, 0.34, 0.22] },
+  { top: 0.35, color: [0.75, 0.41, 0.25] },
+  { top: 0.62, color: [0.81, 0.46, 0.28] },
+  { top: 0.85, color: [0.75, 0.4, 0.24] },
+  { top: 1.1, color: [0.83, 0.48, 0.29] },
+  { top: 1.3, color: [0.87, 0.54, 0.33] },
+  { top: 1.55, color: [0.79, 0.43, 0.26] },
+  { top: 1.8, color: [0.85, 0.5, 0.3] },
+  { top: Number.POSITIVE_INFINITY, color: [0.9, 0.58, 0.36] },
 ];
 
-const VARNISH: Rgb = [0.3, 0.19, 0.14];
-const DESERT_FLOOR: Rgb = [0.86, 0.65, 0.43];
-const PLATEAU_TOP: Rgb = [0.8, 0.54, 0.34];
-const CAP_TOP: Rgb = [0.89, 0.76, 0.57];
-const SCRUB_TINT: Rgb = [0.63, 0.6, 0.43];
-const WASH_SAND: Rgb = [0.86, 0.79, 0.65];
-const WASH_PEBBLE: Rgb = [0.66, 0.58, 0.49];
+const DESERT_FLOOR: Rgb = [0.89, 0.53, 0.32];
+const PLATEAU_TOP: Rgb = [0.88, 0.54, 0.33];
+const CAP_TOP: Rgb = [0.91, 0.6, 0.38];
+const WASH_SAND: Rgb = [0.94, 0.69, 0.46];
+const WASH_PEBBLE: Rgb = [0.86, 0.61, 0.41];
 
 export interface TerrainColorInput {
   readonly height: number;
@@ -83,8 +81,8 @@ export function strataColorAtHeight(worldY: number): Rgb {
   if (!layer) {
     throw new RangeError('CRITICAL: No strata layer found for elevation.');
   }
-  // Fine sedimentary laminations inside each layer
-  const lamination = 1 + Math.sin(worldY * 90) * 0.04;
+  // Wide, soft sedimentary bands (clay-sculpted look, not fine noisy laminations)
+  const lamination = 1 + Math.sin(worldY * 26) * 0.03;
   return clampRgb([
     layer.color[0] * lamination,
     layer.color[1] * lamination,
@@ -108,23 +106,42 @@ export function computeTerrainVertexColor(input: TerrainColorInput): Rgb {
   const { height, slope, grain, streak, washFactor } = input;
   const steep = smoothRange(0.5, 1.1, slope);
 
-  // Cliff faces: banded strata + dark desert-varnish streaks
-  const wobble = (streak - 0.5) * 0.06;
-  const cliff = mixRgb(strataColorAtHeight(height + wobble), VARNISH, Math.pow(streak, 3) * 0.55);
+  // Cliff faces: soft horizontal clay strata, slightly deeper than the flats
+  const wobble = (streak - 0.5) * 0.04;
+  const strata = strataColorAtHeight(height + wobble);
+  const cliff: Rgb = [strata[0] * 0.95, strata[1] * 0.92, strata[2] * 0.92];
 
-  // Flat surfaces: basin floor → plateau tops → cream cap rock
+  // Flat surfaces: basin floor → plateau tops → paler cap rock
   let flat = mixRgb(DESERT_FLOOR, PLATEAU_TOP, smoothRange(PLAIN_Y + 0.3, PLAIN_Y + 0.5, height));
-  flat = mixRgb(flat, CAP_TOP, smoothRange(PLAIN_Y + 1.0, PLAIN_Y + 1.15, height));
-  if (grain > 0.8) {
-    flat = mixRgb(flat, SCRUB_TINT, (grain - 0.8) * 1.5);
-  }
+  flat = mixRgb(flat, CAP_TOP, smoothRange(PLAIN_Y + 1.5, PLAIN_Y + 1.7, height));
 
   let color = mixRgb(flat, cliff, steep);
 
-  // Dry wash: pale sand with scattered pebbles
-  const washColor = mixRgb(WASH_SAND, WASH_PEBBLE, grain > 0.65 ? 0.6 : 0);
+  // Dry wash: pale sandy path with a few soft pebble patches
+  const washColor = mixRgb(WASH_SAND, WASH_PEBBLE, smoothRange(0.6, 0.8, grain) * 0.5);
   color = mixRgb(color, washColor, washFactor * (1 - steep * 0.7));
 
-  const shift = (grain - 0.5) * 0.07;
+  // Very subtle low-frequency tonal variation (no per-vertex speckle)
+  const shift = (grain - 0.5) * 0.025;
   return clampRgb([color[0] + shift, color[1] + shift, color[2] + shift]);
+}
+
+/**
+ * Cheap baked ambient occlusion for clay-like depth.
+ * Concave spots (cliff feet, wash banks) darken; convex rims get a slight highlight.
+ * Returns a color multiplier.
+ */
+export function computeCavityOcclusion(
+  height: number,
+  neighborhoodAverage: number,
+  strength: number
+): number {
+  validateFinite(height, 'height');
+  validateFinite(neighborhoodAverage, 'neighborhoodAverage');
+  validateUnit(strength, 'strength');
+
+  const concavity = neighborhoodAverage - height;
+  const occlusion = smoothRange(0, 0.35, concavity);
+  const convexity = smoothRange(0, 0.25, -concavity);
+  return 1 - strength * occlusion + 0.05 * convexity;
 }

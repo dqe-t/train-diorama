@@ -240,27 +240,27 @@ export function DioramaTracks(): React.JSX.Element | null {
         <>
           <mesh geometry={trackData.ballastGeo} receiveShadow castShadow>
             <meshStandardMaterial
-              color="#8c6a50"
-              roughness={0.94}
+              color="#9a7258"
+              roughness={0.95}
               side={DoubleSide}
-              envMapIntensity={0.5}
+              envMapIntensity={0.4}
             />
           </mesh>
 
           <mesh geometry={trackData.leftRailGeo} castShadow>
             <meshStandardMaterial
-              color="#d6dde6"
-              metalness={0.92}
-              roughness={0.2}
-              envMapIntensity={2.0}
+              color="#8a7466"
+              metalness={0.55}
+              roughness={0.42}
+              envMapIntensity={1.0}
             />
           </mesh>
           <mesh geometry={trackData.rightRailGeo} castShadow>
             <meshStandardMaterial
-              color="#d6dde6"
-              metalness={0.92}
-              roughness={0.2}
-              envMapIntensity={2.0}
+              color="#8a7466"
+              metalness={0.55}
+              roughness={0.42}
+              envMapIntensity={1.0}
             />
           </mesh>
 
