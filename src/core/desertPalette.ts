@@ -16,25 +16,25 @@ interface StrataLayer {
  * Colorado-Plateau-inspired rock column (bottom → top):
  * dark basement, pale shale, chocolate Moenkopi, salmon Entrada, cream Navajo cap.
  */
-/** Soft terracotta "modelling clay" strata: low contrast, wide bands, no harsh streaks. */
+/** Rich terracotta and sedimentary rock strata (bottom → top) with distinct horizontal banding. */
 const STRATA_LAYERS: ReadonlyArray<StrataLayer> = [
-  { top: -0.2, color: [0.5, 0.27, 0.18] },
-  { top: 0.1, color: [0.64, 0.34, 0.22] },
-  { top: 0.35, color: [0.75, 0.41, 0.25] },
-  { top: 0.62, color: [0.81, 0.46, 0.28] },
-  { top: 0.85, color: [0.75, 0.4, 0.24] },
-  { top: 1.1, color: [0.83, 0.48, 0.29] },
-  { top: 1.3, color: [0.87, 0.54, 0.33] },
-  { top: 1.55, color: [0.79, 0.43, 0.26] },
-  { top: 1.8, color: [0.85, 0.5, 0.3] },
-  { top: Number.POSITIVE_INFINITY, color: [0.9, 0.58, 0.36] },
+  { top: -0.2, color: [0.52, 0.24, 0.14] },
+  { top: 0.1, color: [0.65, 0.31, 0.17] },
+  { top: 0.35, color: [0.76, 0.38, 0.21] },
+  { top: 0.62, color: [0.83, 0.44, 0.23] },
+  { top: 0.85, color: [0.71, 0.34, 0.18] },
+  { top: 1.1, color: [0.84, 0.45, 0.24] },
+  { top: 1.35, color: [0.88, 0.51, 0.28] },
+  { top: 1.6, color: [0.78, 0.39, 0.20] },
+  { top: 1.85, color: [0.86, 0.48, 0.26] },
+  { top: Number.POSITIVE_INFINITY, color: [0.90, 0.55, 0.32] },
 ];
 
-const DESERT_FLOOR: Rgb = [0.89, 0.53, 0.32];
-const PLATEAU_TOP: Rgb = [0.88, 0.54, 0.33];
-const CAP_TOP: Rgb = [0.91, 0.6, 0.38];
-const WASH_SAND: Rgb = [0.94, 0.69, 0.46];
-const WASH_PEBBLE: Rgb = [0.86, 0.61, 0.41];
+const DESERT_FLOOR: Rgb = [0.88, 0.46, 0.23];
+const PLATEAU_TOP: Rgb = [0.86, 0.44, 0.22];
+const CAP_TOP: Rgb = [0.90, 0.52, 0.28];
+const WASH_SAND: Rgb = [0.92, 0.62, 0.38];
+const WASH_PEBBLE: Rgb = [0.84, 0.52, 0.32];
 
 export interface TerrainColorInput {
   readonly height: number;
@@ -104,12 +104,12 @@ export function computeTerrainVertexColor(input: TerrainColorInput): Rgb {
   validateUnit(input.washFactor, 'washFactor');
 
   const { height, slope, grain, streak, washFactor } = input;
-  const steep = smoothRange(0.5, 1.1, slope);
+  const steep = smoothRange(0.35, 0.85, slope);
 
-  // Cliff faces: soft horizontal clay strata, slightly deeper than the flats
+  // Cliff faces: rich horizontal clay strata with sedimentary contrast
   const wobble = (streak - 0.5) * 0.04;
   const strata = strataColorAtHeight(height + wobble);
-  const cliff: Rgb = [strata[0] * 0.95, strata[1] * 0.92, strata[2] * 0.92];
+  const cliff: Rgb = [strata[0] * 0.96, strata[1] * 0.92, strata[2] * 0.90];
 
   // Flat surfaces: basin floor → plateau tops → paler cap rock
   let flat = mixRgb(DESERT_FLOOR, PLATEAU_TOP, smoothRange(PLAIN_Y + 0.3, PLAIN_Y + 0.5, height));

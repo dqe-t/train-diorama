@@ -234,7 +234,7 @@ export function DioramaTerrain(): React.JSX.Element {
         setPointerDragging(false);
       }}
     >
-      {/* Layered clay base: a soft lighter slab on top of a dark rounded display plinth */}
+      {/* Layered clay base: a soft terracotta slab on top of a dark rounded display plinth */}
       <RoundedBox
         args={[world.span + 0.3, 0.16, world.span + 0.3]}
         radius={0.07}
@@ -243,7 +243,7 @@ export function DioramaTerrain(): React.JSX.Element {
         receiveShadow
         castShadow
       >
-        <meshStandardMaterial color="#c9774a" roughness={0.95} envMapIntensity={0.4} />
+        <meshStandardMaterial color="#ba5427" roughness={0.92} envMapIntensity={0.4} />
       </RoundedBox>
       <RoundedBox
         args={[world.span + 0.6, 0.22, world.span + 0.6]}

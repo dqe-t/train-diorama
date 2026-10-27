@@ -22,10 +22,10 @@ export function DioramaCanvas(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
 
-  // Warm studio lighting: low key light from the back-left so cliffs cast long soft shadows
-  const sunColor = goldenHour ? '#ffab6b' : '#fff1dc';
-  const skyColor = goldenHour ? '#ffd2b0' : '#ffe9d6';
-  const groundBounce = goldenHour ? '#9a4a28' : '#c0653a';
+  // Warm studio lighting: strong key light from high back-left casting diagonal shadows forward-right
+  const sunColor = goldenHour ? '#ff8c38' : '#ffa658';
+  const skyColor = goldenHour ? '#ffd0a8' : '#ffe4cf';
+  const groundBounce = goldenHour ? '#9e3412' : '#b2441a';
 
   return (
     <Canvas
@@ -33,11 +33,11 @@ export function DioramaCanvas(): React.JSX.Element {
       dpr={[1, 2]}
       gl={{
         toneMapping: ACESFilmicToneMapping,
-        toneMappingExposure: goldenHour ? 1.1 : 1.0,
+        toneMappingExposure: goldenHour ? 1.12 : 1.05,
       }}
     >
-      {/* Percentage-closer soft shadows: soft penumbras like a studio-lit clay model */}
-      <SoftShadows size={28} samples={14} focus={0.4} />
+      {/* Percentage-closer soft shadows: crisp contact grounding with gentle penumbra */}
+      <SoftShadows size={22} samples={16} focus={0.5} />
 
       {/* Strictly Fixed Isometric Orthographic Camera */}
       <OrthographicCamera
@@ -63,29 +63,29 @@ export function DioramaCanvas(): React.JSX.Element {
         }}
       />
 
-      {/* Gentle environment fill for soft matte shading */}
-      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.55 : 0.45} />
+      {/* Warm desert environment fill */}
+      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.6 : 0.5} />
 
-      <ambientLight intensity={goldenHour ? 0.22 : 0.26} color={skyColor} />
-      <hemisphereLight args={[skyColor, groundBounce, 0.65]} />
+      <ambientLight intensity={goldenHour ? 0.25 : 0.3} color={skyColor} />
+      <hemisphereLight args={[skyColor, groundBounce, 0.7]} />
       <directionalLight
         castShadow
-        position={goldenHour ? [-15, 9, 7] : [-11, 17, 9]}
-        intensity={goldenHour ? 2.6 : 2.5}
+        position={goldenHour ? [-20, 14, 2] : [-22, 18, 3]}
+        intensity={goldenHour ? 3.0 : 2.8}
         color={sunColor}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-camera-left={-12}
-        shadow-camera-right={12}
-        shadow-camera-top={12}
-        shadow-camera-bottom={-12}
+        shadow-camera-left={-13}
+        shadow-camera-right={13}
+        shadow-camera-top={13}
+        shadow-camera-bottom={-13}
         shadow-camera-near={0.5}
         shadow-camera-far={60}
-        shadow-bias={-0.0005}
-        shadow-normalBias={0.03}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.025}
       />
-      {/* Weak warm rim light from the front-right to lift the shadow side of cliffs */}
-      <directionalLight position={[12, 6, 10]} intensity={0.35} color="#ffc49a" />
+      {/* Warm ambient bounce from front-right to lift deep cliff crevices */}
+      <directionalLight position={[14, 8, 12]} intensity={0.4} color="#ffb080" />
 
       <group position={[0, -0.3, 0]}>
         {/* Soft ambient contact shadow beneath the plinth */}
