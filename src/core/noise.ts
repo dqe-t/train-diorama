@@ -99,15 +99,15 @@ export function sampleMesaMask(worldX: number, worldZ: number, seed: number): nu
   // Organic canyon ridge fractal noise
   const ridgeNoise = fractalNoise2D(warpX * 0.85 + 45, warpZ * 0.85 + 45, seed + 9);
 
-  // Backdrop progression: 0 in the foreground, smoothly ramping up towards the rear
-  const backdropBias = smoothRange(-2.0, 7.0, rearDepth);
+  // Backdrop progression: 0 across the valley basin, ramping up cleanly towards the rear backdrop
+  const backdropBias = smoothRange(0.6, 7.8, rearDepth);
 
   // Combine backdrop ramp with fractal ridge contours
-  let mask = backdropBias * 0.62 + ridgeNoise * 0.46;
+  let mask = backdropBias * 0.65 + ridgeNoise * 0.38;
 
-  // In the foreground (warpX + warpZ > 0.8), strictly suppress the mask so the view of trains is unobstructed
-  const frontWeight = smoothRange(0.2, 3.8, warpX + warpZ);
-  mask *= 1 - frontWeight * 0.82;
+  // In the valley and foreground (warpX + warpZ > -0.6), suppress mask so tracks remain grounded on flat desert
+  const frontWeight = smoothRange(-0.8, 2.6, warpX + warpZ);
+  mask *= 1 - frontWeight * 0.86;
 
   // Gentle boundary fade at outer edges of the diorama block
   const edge = Math.max(Math.abs(worldX), Math.abs(worldZ));

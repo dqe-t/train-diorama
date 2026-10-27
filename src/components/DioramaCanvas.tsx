@@ -22,10 +22,10 @@ export function DioramaCanvas(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
 
-  // Warm studio lighting: strong key light from high back-left casting diagonal shadows forward-right
-  const sunColor = goldenHour ? '#ff8c38' : '#ffa658';
+  // Warm studio lighting: strong directional sun from high back-left casting diagonal shadows
+  const sunColor = goldenHour ? '#ffa24d' : '#ffe2c2';
   const skyColor = goldenHour ? '#ffd0a8' : '#ffe4cf';
-  const groundBounce = goldenHour ? '#9e3412' : '#b2441a';
+  const groundBounce = goldenHour ? '#84280c' : '#8c3514';
 
   return (
     <Canvas
@@ -33,11 +33,11 @@ export function DioramaCanvas(): React.JSX.Element {
       dpr={[1, 2]}
       gl={{
         toneMapping: ACESFilmicToneMapping,
-        toneMappingExposure: goldenHour ? 1.12 : 1.05,
+        toneMappingExposure: goldenHour ? 1.08 : 1.04,
       }}
     >
       {/* Percentage-closer soft shadows: crisp contact grounding with gentle penumbra */}
-      <SoftShadows size={22} samples={16} focus={0.5} />
+      <SoftShadows size={6} samples={16} focus={0.5} />
 
       {/* Strictly Fixed Isometric Orthographic Camera */}
       <OrthographicCamera
@@ -63,15 +63,15 @@ export function DioramaCanvas(): React.JSX.Element {
         }}
       />
 
-      {/* Warm desert environment fill */}
-      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.6 : 0.5} />
+      {/* Subtle desert environment reflections */}
+      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.35 : 0.25} />
 
-      <ambientLight intensity={goldenHour ? 0.25 : 0.3} color={skyColor} />
-      <hemisphereLight args={[skyColor, groundBounce, 0.7]} />
+      <ambientLight intensity={goldenHour ? 0.16 : 0.18} color={skyColor} />
+      <hemisphereLight args={[skyColor, groundBounce, 0.35]} />
       <directionalLight
         castShadow
-        position={goldenHour ? [-20, 14, 2] : [-22, 18, 3]}
-        intensity={goldenHour ? 3.0 : 2.8}
+        position={goldenHour ? [-15, 18, 16] : [-16, 22, 20]}
+        intensity={goldenHour ? 3.2 : 3.0}
         color={sunColor}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}

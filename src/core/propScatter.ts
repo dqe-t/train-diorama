@@ -93,11 +93,15 @@ export function pickDesertPropKind(
     return null;
   }
 
-  if (roll > 0.92) return 'hoodoo';
-  if (roll > 0.74) return 'saguaro';
+  // Hoodoos form along canyon edges and mesa aprons
+  const isMesaApron = slope > 0.12 && slope <= 0.50;
+  if (isMesaApron && roll > 0.82) return 'hoodoo';
+
+  if (roll > 0.76) return 'saguaro';
   if (roll > 0.52) return 'sagebrush';
-  if (roll > 0.42) return 'boulder';
-  if (roll > 0.36) return 'juniper';
+  if (roll > 0.40) return 'boulder';
+  if (roll > 0.32) return 'juniper';
+  return null;
   return null;
 }
 

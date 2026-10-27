@@ -34,14 +34,22 @@ describe('desert palette & terrain vertex colors', (): void => {
     expect(wash[2]).toBeGreaterThan(floor[2]);
   });
 
-  it('transitions gradually from basin floor to cliff rock between slope 0.35 and 0.85 (Happy Path)', (): void => {
+  it('transitions gradually from basin floor to cliff rock between slope 0.26 and 0.75 (Happy Path)', (): void => {
     const gentle = computeTerrainVertexColor({ ...BASE, slope: 0.1 });
-    const midSlope = computeTerrainVertexColor({ ...BASE, slope: 0.6 });
+    const midSlope = computeTerrainVertexColor({ ...BASE, slope: 0.5 });
     const sheerCliff = computeTerrainVertexColor({ ...BASE, slope: 1.5 });
 
     // Mid-slope color channel should lie strictly between gentle slope and sheer cliff
     expect(midSlope[1]).toBeLessThan(gentle[1]);
     expect(sheerCliff[1]).toBeLessThan(midSlope[1]);
+  });
+
+  it('exhibits distinct horizontal strata contrast between alternating layers (Happy Path)', (): void => {
+    const chocolateBand = strataColorAtHeight(0.55);
+    const ochreBand = strataColorAtHeight(0.75);
+    // Dark chocolate layer has significantly lower red/green luminance than warm ochre band
+    expect(chocolateBand[0]).toBeLessThan(ochreBand[0]);
+    expect(chocolateBand[1]).toBeLessThan(ochreBand[1]);
   });
 
   it('maps strata layers by elevation and mixes colors linearly (Happy Path)', (): void => {

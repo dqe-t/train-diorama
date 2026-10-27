@@ -111,13 +111,13 @@ export function createOrganicDiorama(
 
   const trackPoints: Vec3Point[] = [];
   if (withStarterTrack) {
-    // Wide, graceful model railroad loop with gentle curves
+    // Wide, graceful model railroad loop centered in the open desert valley
     const nodes = 16;
     for (let i = 0; i < nodes; i += 1) {
       const theta = (i / nodes) * Math.PI * 2;
-      const r = 4.6 + Math.cos(2 * theta) * 0.45;
-      const wx = Math.sin(theta) * (r + 0.35);
-      const wz = Math.cos(theta) * (r - 0.35);
+      const r = 4.1 + Math.cos(2 * theta) * 0.35;
+      const wx = 0.3 + Math.sin(theta) * (r + 0.2);
+      const wz = 0.3 + Math.cos(theta) * (r - 0.2);
       trackPoints.push({ x: wx, y: computeTrackPointY(wx, wz, seed), z: wz });
     }
   }

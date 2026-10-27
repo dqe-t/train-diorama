@@ -18,23 +18,23 @@ interface StrataLayer {
  */
 /** Rich terracotta and sedimentary rock strata (bottom → top) with distinct horizontal banding. */
 const STRATA_LAYERS: ReadonlyArray<StrataLayer> = [
-  { top: -0.2, color: [0.52, 0.24, 0.14] },
-  { top: 0.1, color: [0.65, 0.31, 0.17] },
-  { top: 0.35, color: [0.76, 0.38, 0.21] },
-  { top: 0.62, color: [0.83, 0.44, 0.23] },
-  { top: 0.85, color: [0.71, 0.34, 0.18] },
-  { top: 1.1, color: [0.84, 0.45, 0.24] },
-  { top: 1.35, color: [0.88, 0.51, 0.28] },
-  { top: 1.6, color: [0.78, 0.39, 0.20] },
-  { top: 1.85, color: [0.86, 0.48, 0.26] },
-  { top: Number.POSITIVE_INFINITY, color: [0.90, 0.55, 0.32] },
+  { top: -0.2, color: [0.44, 0.17, 0.09] },
+  { top: 0.15, color: [0.58, 0.24, 0.13] },
+  { top: 0.40, color: [0.72, 0.33, 0.18] },
+  { top: 0.65, color: [0.50, 0.20, 0.11] },
+  { top: 0.90, color: [0.76, 0.37, 0.20] },
+  { top: 1.15, color: [0.56, 0.23, 0.13] },
+  { top: 1.45, color: [0.80, 0.41, 0.22] },
+  { top: 1.75, color: [0.64, 0.28, 0.15] },
+  { top: 2.05, color: [0.84, 0.46, 0.25] },
+  { top: Number.POSITIVE_INFINITY, color: [0.89, 0.54, 0.31] },
 ];
 
-const DESERT_FLOOR: Rgb = [0.88, 0.46, 0.23];
+const DESERT_FLOOR: Rgb = [0.89, 0.48, 0.25];
 const PLATEAU_TOP: Rgb = [0.86, 0.44, 0.22];
-const CAP_TOP: Rgb = [0.90, 0.52, 0.28];
-const WASH_SAND: Rgb = [0.92, 0.62, 0.38];
-const WASH_PEBBLE: Rgb = [0.84, 0.52, 0.32];
+const CAP_TOP: Rgb = [0.90, 0.53, 0.29];
+const WASH_SAND: Rgb = [0.93, 0.65, 0.41];
+const WASH_PEBBLE: Rgb = [0.85, 0.55, 0.35];
 
 export interface TerrainColorInput {
   readonly height: number;
@@ -104,12 +104,12 @@ export function computeTerrainVertexColor(input: TerrainColorInput): Rgb {
   validateUnit(input.washFactor, 'washFactor');
 
   const { height, slope, grain, streak, washFactor } = input;
-  const steep = smoothRange(0.35, 0.85, slope);
+  const steep = smoothRange(0.26, 0.75, slope);
 
   // Cliff faces: rich horizontal clay strata with sedimentary contrast
   const wobble = (streak - 0.5) * 0.04;
   const strata = strataColorAtHeight(height + wobble);
-  const cliff: Rgb = [strata[0] * 0.96, strata[1] * 0.92, strata[2] * 0.90];
+  const cliff: Rgb = [strata[0] * 0.92, strata[1] * 0.88, strata[2] * 0.86];
 
   // Flat surfaces: basin floor → plateau tops → paler cap rock
   let flat = mixRgb(DESERT_FLOOR, PLATEAU_TOP, smoothRange(PLAIN_Y + 0.3, PLAIN_Y + 0.5, height));
