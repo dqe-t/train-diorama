@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   fractalNoise2D,
+  MESA_THRESHOLDS,
+  MESA_TIER_HEIGHTS,
   PLAIN_Y,
   sampleMesaMask,
   sampleNaturalTerrainHeight,
@@ -57,6 +59,40 @@ describe('desert terrain: mesas, dry wash, flat basin & terraforming', (): void 
     expect(flatCount).toBeGreaterThan(200);
     expect(washCount).toBeGreaterThan(10);
     expect(Number.isFinite(sampleMesaMask(0, 0, 4208))).toBe(true);
+  });
+
+  it('orients higher ground primarily in the rear backdrop and forms two distinct mesa plateau tiers (Happy Path)', (): void => {
+    expect(MESA_THRESHOLDS.length).toBe(2);
+    expect(MESA_TIER_HEIGHTS.length).toBe(2);
+
+    // Foreground points (+X, +Z) must remain open and low to not obstruct trains
+    const foregroundHeights: number[] = [];
+    for (let x = 2; x <= 6; x += 1) {
+      for (let z = 2; z <= 6; z += 1) {
+        foregroundHeights.push(sampleNaturalTerrainHeight(x, z, 4208));
+      }
+    }
+    const avgForeground =
+      foregroundHeights.reduce((acc, h): number => acc + h, 0) / foregroundHeights.length;
+
+    // Background points (-X, -Z) contain the two-tiered mesa backdrop
+    const backgroundHeights: number[] = [];
+    for (let x = -6; x <= -2; x += 1) {
+      for (let z = -6; z <= -2; z += 1) {
+        backgroundHeights.push(sampleNaturalTerrainHeight(x, z, 4208));
+      }
+    }
+    const avgBackground =
+      backgroundHeights.reduce((acc, h): number => acc + h, 0) / backgroundHeights.length;
+
+    // Background is significantly higher than foreground
+    expect(avgBackground).toBeGreaterThan(avgForeground + 0.5);
+
+    // Verify presence of Tier 1 (Lower Mesa ~1.0-1.4m) and Tier 2 (Upper Mesa ~1.8-2.3m)
+    const hasTier1 = backgroundHeights.some((h): boolean => h >= 1.0 && h <= 1.5);
+    const hasTier2 = backgroundHeights.some((h): boolean => h >= 1.8);
+    expect(hasTier1).toBe(true);
+    expect(hasTier2).toBe(true);
   });
 
   it('preserves natural terrain geometry completely without track corridor flattening (Happy Path)', (): void => {

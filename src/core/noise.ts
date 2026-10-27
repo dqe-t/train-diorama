@@ -8,10 +8,10 @@ export const WASH_BED_Y = 0.1;
 /** Minimal clearance above natural terrain for the track bed. */
 export const TRACK_BED_OFFSET = 0.04;
 
-/** Mesa mask thresholds for each terraced cliff tier. */
-const MESA_THRESHOLDS: readonly [number, number, number] = [0.545, 0.625, 0.69];
-/** Height gained when crossing each cliff tier. */
-const MESA_TIER_HEIGHTS: readonly [number, number, number] = [0.5, 0.48, 0.42];
+/** Two distinct plateau tiers: Lower Mesa (Tier 1) and Upper Backdrop Mesa (Tier 2). */
+export const MESA_THRESHOLDS: readonly [number, number] = [0.46, 0.68];
+/** Height gained when crossing each cliff tier (Tier 1 rises +0.78m, Tier 2 rises +0.86m). */
+export const MESA_TIER_HEIGHTS: readonly [number, number] = [0.78, 0.86];
 /** Mask width over which a cliff rises (smaller = more vertical). */
 const CLIFF_SHARPNESS = 0.012;
 
@@ -78,25 +78,44 @@ export function fractalNoise2D(x: number, z: number, seed: number): number {
   return sum / norm;
 }
 
-/** 0..~1 mask: high values become terraced mesas & buttes. */
+/**
+ * 0..~1 mask: high values become terraced mesas & buttes.
+ * Stepped primarily towards the rear backdrop (-X, -Z) so mesas form a theatrical
+ * backdrop wall and never obstruct trains and tracks running in the open foreground (+X, +Z).
+ */
 export function sampleMesaMask(worldX: number, worldZ: number, seed: number): number {
   validateFinite(worldX, 'worldX');
   validateFinite(worldZ, 'worldZ');
   validateFinite(seed, 'seed');
 
-  const warpX = worldX + (valueNoise2D(worldX * 0.25, worldZ * 0.25, seed + 19) - 0.5) * 2.6;
-  const warpZ = worldZ + (valueNoise2D(worldX * 0.25, worldZ * 0.25, seed + 47) - 0.5) * 2.6;
-  let mask = fractalNoise2D(warpX * 1.1 + 40, warpZ * 1.1 + 40, seed + 5);
+  // Low-frequency organic domain warping for natural, winding cliff lines
+  const warpX = worldX + (valueNoise2D(worldX * 0.22, worldZ * 0.22, seed + 19) - 0.5) * 3.2;
+  const warpZ = worldZ + (valueNoise2D(worldX * 0.22, worldZ * 0.22, seed + 47) - 0.5) * 3.2;
 
-  // Keep a broad, flat central basin for settlements and track loops
-  const radial = Math.hypot(worldX, worldZ);
-  mask -= 0.14 * (1 - smoothRange(2.5, 6.5, radial));
+  // Depth along the viewing axis: camera is at (+22, +22, +22) looking towards (0, 0, 0)
+  // (-warpX - warpZ) is positive in the rear/backdrop, negative in the foreground
+  const rearDepth = -(warpX + warpZ) / 1.4142;
 
-  // Raise a rocky rim near the diorama edges for a framed canyon look
+  // Organic canyon ridge fractal noise
+  const ridgeNoise = fractalNoise2D(warpX * 0.85 + 45, warpZ * 0.85 + 45, seed + 9);
+
+  // Backdrop progression: 0 in the foreground, smoothly ramping up towards the rear
+  const backdropBias = smoothRange(-2.0, 7.0, rearDepth);
+
+  // Combine backdrop ramp with fractal ridge contours
+  let mask = backdropBias * 0.62 + ridgeNoise * 0.46;
+
+  // In the foreground (warpX + warpZ > 0.8), strictly suppress the mask so the view of trains is unobstructed
+  const frontWeight = smoothRange(0.2, 3.8, warpX + warpZ);
+  mask *= 1 - frontWeight * 0.82;
+
+  // Gentle boundary fade at outer edges of the diorama block
   const edge = Math.max(Math.abs(worldX), Math.abs(worldZ));
-  mask += 0.12 * smoothRange(5.5, 8.0, edge);
+  if (edge > 6.5) {
+    mask -= smoothRange(6.5, 8.0, edge) * 0.12;
+  }
 
-  return mask;
+  return Math.max(0, Math.min(1, mask));
 }
 
 /** 0 = outside the dry wash, 1 = on the arroyo bed. */
@@ -124,15 +143,18 @@ export function sampleNaturalTerrainHeight(worldX: number, worldZ: number, seed:
   // Flat desert floor with very gentle dune undulation
   let height = PLAIN_Y + (valueNoise2D(worldX * 0.6, worldZ * 0.6, seed + 7) - 0.5) * 0.05;
 
-  // Terraced mesas: a soft talus apron, then near-vertical sandstone cliffs per tier
   const mask = sampleMesaMask(worldX, worldZ, seed);
-  height += 0.12 * smoothRange(MESA_THRESHOLDS[0] - 0.08, MESA_THRESHOLDS[0], mask);
+
+  // Soft talus scree apron before Level 1 cliff
+  height += 0.10 * smoothRange(MESA_THRESHOLDS[0] - 0.08, MESA_THRESHOLDS[0], mask);
+
+  // Two distinct stepped plateau tiers
   for (let tier = 0; tier < MESA_THRESHOLDS.length; tier += 1) {
     const threshold = MESA_THRESHOLDS[tier];
     height += MESA_TIER_HEIGHTS[tier] * smoothRange(threshold, threshold + CLIFF_SHARPNESS, mask);
   }
 
-  // Carve the dry arroyo — through mesas it becomes a slot canyon
+  // Carve the dry arroyo wash
   const wash = sampleWashFactor(worldX, worldZ, seed);
   if (wash > 0) {
     const bedY = WASH_BED_Y + (valueNoise2D(worldX * 1.4, worldZ * 1.4, seed + 23) - 0.5) * 0.04;

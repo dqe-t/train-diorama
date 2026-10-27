@@ -70,13 +70,13 @@ function buildStarterStructures(
     });
   }
 
-  // A small adobe pueblo cluster in the flat central basin
+  // A small adobe pueblo cluster in the open foreground sunlit valley
   const offsets: ReadonlyArray<readonly [number, number, number]> = [
-    [-1.8, -1.2, 2],
-    [-0.7, -1.9, 1],
-    [1.4, -1.6, 3],
-    [2.1, -0.6, 1],
-    [0.3, 1.4, 2],
+    [0.8, 0.4, 2],
+    [1.8, -0.2, 3],
+    [2.2, 0.7, 1],
+    [0.3, 1.6, 2],
+    [1.3, 1.4, 1],
   ];
   offsets.forEach(([cx, cz, stories], idx): void => {
     if (!isBuildableSite(cx, cz, seed, samples)) return;

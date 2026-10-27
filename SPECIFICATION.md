@@ -14,9 +14,15 @@
 
 ### 2.2. Untouched Natural Landscape & Grade-Conforming Tracks
 * **Zero Landscape Modification:** The terrain is 100% natural and never carved, flattened, or excavated by tracks. Dramatic cliffs, mesas, and dry arroyos remain completely untouched and pristine.
+* **Classical Model Railroad Theatrical Backdrop Layout:**
+  * Higher elevations (mountains and mesas) are positioned predominantly in the rear/backdrop ($-X, -Z$ direction relative to the isometric camera at $[22, 22, 22]$).
+  * The foreground ($+X, +Z$) remains an open, flat desert valley floor ($y \approx 0.35$m) and dry arroyo wash, guaranteeing 100% unobstructed sightlines of all trains running on the tracks, the depot, and town settlements.
+* **Two Distinct Mesa Plateau Levels:**
+  * **Level 1 (Lower Mesa Plateau Shelf):** Mid-tier sandstone bench rising by $+0.78$m to $y \approx 1.20$m with vertical cliff faces and talus slopes.
+  * **Level 2 (Upper Mesa Backdrop Ridge):** Grand high-tier sandstone plateau rising an additional $+0.86$m to $y \approx 2.06$m, creating the majestic rear skyline of the diorama.
 * **Landscape-Aligned 3D Track Profile:** Tracks rise and fall with the natural landscape contours.
 * **Grade-Limiting Relaxation & Adaptive Substructures:**
-  * To prevent excessively steep inclines over cliffs or canyons, multi-pass vertical relaxation caps the maximum rail grade at 16%.
+  * To prevent excessively steep inclines over cliffs or canyons, multi-pass vertical relaxation caps the maximum rail grade at 14%.
   * Where the natural terrain drops beneath the track, adaptive supporting structures are generated below the rails:
     * **Flush Ground Contact ($h \le 0.10$m):** Standard gravel ballast bed resting directly on the desert sand.
     * **Low/Moderate Fills ($0.10 < h \le 0.30$m):** Stacked timber cribbing walls and retaining abutments.
