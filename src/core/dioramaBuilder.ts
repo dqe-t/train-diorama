@@ -1,11 +1,11 @@
 import { OrganicDioramaWorld, PlacedStructure, SplineSample, ToolType, Vec3Point } from '../types/diorama';
 import { hashCoords, sampleNaturalTerrainHeight, TRACK_BED_OFFSET } from './noise';
 import { isBuildableSite, scatterDesertProps } from './propScatter';
-import { applySculptStamp } from './terrainSculpt';
+import { applyMesaStamp, applySculptStamp } from './terrainSculpt';
 import { buildSplineSamples } from './trackGraph';
 
 const DEFAULT_SPLINE_SAMPLES = 160;
-const VALID_TOOLS: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish', 'sculpt'];
+const VALID_TOOLS: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish', 'sculpt', 'mesa', 'ramp'];
 
 function validateWorld(world: OrganicDioramaWorld): void {
   if (!world || typeof world.span !== 'number') {
@@ -13,11 +13,7 @@ function validateWorld(world: OrganicDioramaWorld): void {
   }
 }
 
-/**
- * Tracks conform directly to the natural landscape elevation.
- * Spline relaxation then smooths out overly steep gradients by elevating
- * tracks on substructures.
- */
+/** Tracks conform to natural terrain; spline relaxation elevates on substructures. */
 function computeTrackPointY(x: number, z: number, seed: number): number {
   return sampleNaturalTerrainHeight(x, z, seed) + TRACK_BED_OFFSET;
 }
@@ -149,6 +145,8 @@ export function createOrganicDiorama(
     naturalProps: scatterDesertProps(span, seed, splineSamples, structures),
     structures,
     sculptStamps: [],
+    mesaStamps: [],
+    rampSegments: [],
   };
 }
 
@@ -329,6 +327,10 @@ export function applyWorldSpaceTool(
   if (tool === 'sculpt') {
     return { ...world, sculptStamps: applySculptStamp(world.sculptStamps, worldX, worldZ, 'lift') };
   }
+  if (tool === 'mesa') {
+    return { ...world, mesaStamps: applyMesaStamp(world.mesaStamps, worldX, worldZ, false) };
+  }
+  if (tool === 'ramp') return world;
   return applyBuildingTool(world, worldX, worldZ, tool);
 }
 

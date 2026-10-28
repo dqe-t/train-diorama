@@ -62,9 +62,12 @@ export function DioramaCanvas(): React.JSX.Element {
         maxZoom={68}
         panSpeed={1.1}
         mouseButtons={{
-          LEFT: MOUSE.PAN,
+          LEFT: activeTool === 'ramp' ? undefined : MOUSE.PAN,
           MIDDLE: MOUSE.DOLLY,
-          RIGHT: activeTool === 'sculpt' ? undefined : MOUSE.PAN,
+          RIGHT:
+            activeTool === 'sculpt' || activeTool === 'mesa' || activeTool === 'ramp'
+              ? undefined
+              : MOUSE.PAN,
         }}
       />
 

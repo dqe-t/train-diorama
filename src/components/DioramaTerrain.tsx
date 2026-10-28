@@ -1,31 +1,19 @@
 import React, { useEffect, useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
-import { RoundedBox } from '@react-three/drei';
+import { Line, RoundedBox } from '@react-three/drei';
 import {
-  BufferAttribute,
-  BufferGeometry,
-  ClampToEdgeWrapping,
-  Color,
-  DataTexture,
-  DoubleSide,
-  LinearFilter,
-  LinearMipmapLinearFilter,
-  RepeatWrapping,
-  RGBAFormat,
-  SRGBColorSpace,
-  Vector2,
+  BufferAttribute, BufferGeometry, ClampToEdgeWrapping, Color, DataTexture,
+  DoubleSide, LinearFilter, LinearMipmapLinearFilter, RepeatWrapping,
+  RGBAFormat, SRGBColorSpace, Vector2,
 } from 'three';
 import {
-  computeCavityOcclusion,
-  computeTerrainVertexColor,
-  STRATA_BOTTOM_Y,
-  STRATA_TOP_Y,
+  computeCavityOcclusion, computeTerrainVertexColor, STRATA_BOTTOM_Y, STRATA_TOP_Y,
 } from '../core/desertPalette';
 import { sampleWashFactor, valueNoise2D } from '../core/noise';
 import { sampleCompositeTerrainHeight } from '../core/terrainSculpt';
 import { generateSandNormalPixels, generateStrataPixels } from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
-import { SculptStamp } from '../types/diorama';
+import { MesaStamp, RampSegment, SculptStamp } from '../types/diorama';
 import { DesertPropItem } from './DesertFlora';
 
 const MESH_SEGMENTS = 192;
@@ -43,7 +31,9 @@ interface TerrainGeometries {
 function buildSculptedTerrainGeometry(
   span: number,
   seed: number,
-  sculptStamps: ReadonlyArray<SculptStamp>
+  sculptStamps: ReadonlyArray<SculptStamp>,
+  mesaStamps: ReadonlyArray<MesaStamp>,
+  rampSegments: ReadonlyArray<RampSegment>
 ): TerrainGeometries {
   const half = span * 0.5;
   const step = span / MESH_SEGMENTS;
@@ -55,7 +45,14 @@ function buildSculptedTerrainGeometry(
     const row: number[] = [];
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
       row.push(
-        sampleCompositeTerrainHeight(-half + ix * step, -half + iz * step, seed, sculptStamps)
+        sampleCompositeTerrainHeight(
+          -half + ix * step,
+          -half + iz * step,
+          seed,
+          sculptStamps,
+          mesaStamps,
+          rampSegments
+        )
       );
     }
     heights.push(row);
@@ -90,8 +87,7 @@ function buildSculptedTerrainGeometry(
 
       const neighborhood =
         (hAt(ix - r, iz) + hAt(ix + r, iz) + hAt(ix, iz - r) + hAt(ix, iz + r) +
-          hAt(ix - r, iz - r) + hAt(ix + r, iz + r) + hAt(ix - r, iz + r) + hAt(ix + r, iz - r)) /
-        8;
+          hAt(ix - r, iz - r) + hAt(ix + r, iz + r) + hAt(ix - r, iz + r) + hAt(ix + r, iz - r)) * 0.125;
       const ao = computeCavityOcclusion(h, neighborhood, AO_STRENGTH);
       linear.setRGB(cr * ao, cg * ao, cb * ao, SRGBColorSpace);
 
@@ -108,8 +104,7 @@ function buildSculptedTerrainGeometry(
       const a = iz * vertsPerRow + ix;
       const b = a + 1;
       const c = a + vertsPerRow;
-      const d = c + 1;
-      indices.push(a, c, b, b, c, d);
+      indices.push(a, c, b, b, c, c + 1);
     }
   }
 
@@ -120,7 +115,6 @@ function buildSculptedTerrainGeometry(
   surfaceGeo.setIndex(indices);
   surfaceGeo.computeVertexNormals();
 
-  // Contoured cutaway sides: strata texture is mapped by world height so bands match the cliffs
   const skirtPos: number[] = [];
   const skirtUv: number[] = [];
   const strataRange = STRATA_TOP_Y - STRATA_BOTTOM_Y;
@@ -155,29 +149,19 @@ function buildSculptedTerrainGeometry(
 }
 
 function createStrataTexture(seed: number): DataTexture {
-  const width = 64;
-  const height = 256;
-  const tex = new DataTexture(generateStrataPixels(width, height, seed), width, height, RGBAFormat);
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = ClampToEdgeWrapping;
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.colorSpace = SRGBColorSpace;
-  tex.needsUpdate = true;
+  const tex = new DataTexture(generateStrataPixels(64, 256, seed), 64, 256, RGBAFormat);
+  tex.wrapS = RepeatWrapping; tex.wrapT = ClampToEdgeWrapping;
+  tex.magFilter = LinearFilter; tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true; tex.colorSpace = SRGBColorSpace; tex.needsUpdate = true;
   return tex;
 }
 
 function createRippleNormalTexture(seed: number): DataTexture {
-  const size = RIPPLE_TEXTURE_SIZE;
-  const tex = new DataTexture(generateSandNormalPixels(size, seed, 3.0), size, size, RGBAFormat);
-  tex.wrapS = RepeatWrapping;
-  tex.wrapT = RepeatWrapping;
-  tex.magFilter = LinearFilter;
-  tex.minFilter = LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 4;
-  tex.needsUpdate = true;
+  const s = RIPPLE_TEXTURE_SIZE;
+  const tex = new DataTexture(generateSandNormalPixels(s, seed, 3.0), s, s, RGBAFormat);
+  tex.wrapS = RepeatWrapping; tex.wrapT = RepeatWrapping;
+  tex.magFilter = LinearFilter; tex.minFilter = LinearMipmapLinearFilter;
+  tex.generateMipmaps = true; tex.anisotropy = 4; tex.needsUpdate = true;
   return tex;
 }
 
@@ -185,21 +169,26 @@ export function DioramaTerrain(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const activeTool = useDioramaStore((s): typeof s.activeTool => s.activeTool);
   const isPointerDragging = useDioramaStore((s): boolean => s.isPointerDragging);
+  const hoverPoint = useDioramaStore((s): typeof s.hoverPoint => s.hoverPoint);
+  const rampStartPoint = useDioramaStore((s): typeof s.rampStartPoint => s.rampStartPoint);
   const setHoverPoint = useDioramaStore((s): typeof s.setHoverPoint => s.setHoverPoint);
-  const setPointerDragging = useDioramaStore(
-    (s): typeof s.setPointerDragging => s.setPointerDragging
-  );
-  const interactAtWorldPoint = useDioramaStore(
-    (s): typeof s.interactAtWorldPoint => s.interactAtWorldPoint
-  );
-  const sculptGroundAtPoint = useDioramaStore(
-    (s): typeof s.sculptGroundAtPoint => s.sculptGroundAtPoint
-  );
+  const setPointerDragging = useDioramaStore((s): typeof s.setPointerDragging => s.setPointerDragging);
+  const setRampStartPoint = useDioramaStore((s): typeof s.setRampStartPoint => s.setRampStartPoint);
+  const interactAtWorldPoint = useDioramaStore((s): typeof s.interactAtWorldPoint => s.interactAtWorldPoint);
+  const sculptGroundAtPoint = useDioramaStore((s): typeof s.sculptGroundAtPoint => s.sculptGroundAtPoint);
+  const stampMesaAtPoint = useDioramaStore((s): typeof s.stampMesaAtPoint => s.stampMesaAtPoint);
+  const createRampSegment = useDioramaStore((s): typeof s.createRampSegment => s.createRampSegment);
 
   const geometries = useMemo(
     (): TerrainGeometries =>
-      buildSculptedTerrainGeometry(world.span, world.seed, world.sculptStamps),
-    [world.span, world.seed, world.sculptStamps]
+      buildSculptedTerrainGeometry(
+        world.span,
+        world.seed,
+        world.sculptStamps,
+        world.mesaStamps,
+        world.rampSegments
+      ),
+    [world.span, world.seed, world.sculptStamps, world.mesaStamps, world.rampSegments]
   );
   const rippleTexture = useMemo(
     (): DataTexture => createRippleNormalTexture(world.seed),
@@ -228,11 +217,45 @@ export function DioramaTerrain(): React.JSX.Element {
       }
       return;
     }
+    if (activeTool === 'mesa') {
+      if (e.button === 0) {
+        stampMesaAtPoint(e.point.x, e.point.z, false);
+      } else if (e.button === 2) {
+        stampMesaAtPoint(e.point.x, e.point.z, true);
+      }
+      return;
+    }
+    if (activeTool === 'ramp') {
+      if (e.button === 0) {
+        setRampStartPoint({ x: e.point.x, y: e.point.y, z: e.point.z });
+        setPointerDragging(true);
+      }
+      return;
+    }
     if (e.button !== 0) {
       return;
     }
     setPointerDragging(true);
     interactAtWorldPoint(e.point.x, e.point.z);
+  };
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>): void => {
+    e.stopPropagation();
+    if (activeTool === 'ramp' && rampStartPoint) {
+      const dist = Math.hypot(e.point.x - rampStartPoint.x, e.point.z - rampStartPoint.z);
+      if (dist >= 0.75) {
+        createRampSegment(
+          rampStartPoint.x,
+          rampStartPoint.z,
+          rampStartPoint.y,
+          e.point.x,
+          e.point.z,
+          e.point.y
+        );
+      }
+      setRampStartPoint(null);
+    }
+    setPointerDragging(false);
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>): void => {
@@ -248,9 +271,10 @@ export function DioramaTerrain(): React.JSX.Element {
 
   return (
     <group
-      onPointerUp={(): void => setPointerDragging(false)}
+      onPointerUp={handlePointerUp}
       onPointerLeave={(): void => {
         setHoverPoint(null);
+        setRampStartPoint(null);
         setPointerDragging(false);
       }}
     >
@@ -303,6 +327,17 @@ export function DioramaTerrain(): React.JSX.Element {
           envMapIntensity={0.45}
         />
       </mesh>
+
+      {activeTool === 'ramp' && rampStartPoint && isPointerDragging && hoverPoint && (
+        <Line
+          points={[
+            [rampStartPoint.x, rampStartPoint.y + 0.06, rampStartPoint.z],
+            [hoverPoint.x, hoverPoint.y + 0.06, hoverPoint.z],
+          ]}
+          color="#ffd257"
+          lineWidth={4}
+        />
+      )}
 
       {world.naturalProps.map((prop): React.JSX.Element => (
         <DesertPropItem key={prop.id} prop={prop} />

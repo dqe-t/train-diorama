@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyMesaStamp,
+  applyRampSegment,
   applySculptStamp,
   sampleCompositeTerrainHeight,
   sampleSculptOffset,
@@ -96,6 +98,63 @@ describe('terrainSculpt module', (): void => {
 
     expect((): void => {
       applySculptStamp([], 0, 0, 'lift', 0.08, -1.0);
+    }).toThrow(RangeError);
+  });
+
+  // Happy Path: Tier Isolation guarantees lifting ground never alters mesa tops
+  it('isolates tiers so lifting basin ground has zero influence on mesa plateau vertices', (): void => {
+    const stamps = applySculptStamp([], 0, 0, 'lift');
+    // On basin floor (baseHeight = 0.42m), full lift +0.08m
+    const basinLift = sampleSculptOffset(0, 0, stamps, 0.42);
+    expect(basinLift).toBeCloseTo(0.08, 4);
+
+    // On mesa tier 1 plateau (baseHeight = 1.20m), lift influence is masked to exactly 0
+    const mesaLift = sampleSculptOffset(0, 0, stamps, 1.20);
+    expect(mesaLift).toBe(0);
+
+    // On upper mesa tier 2 (baseHeight = 2.06m), lift influence is strictly 0
+    const upperMesaLift = sampleSculptOffset(0, 0, stamps, 2.06);
+    expect(upperMesaLift).toBe(0);
+  });
+
+  // Happy Path: Mesa Plateaus and Incline Ramps
+  it('creates flat mesa plateaus and smooth incline ramps connecting basin to mesa', (): void => {
+    // 1. Stamp a mesa plateau at (2, 2)
+    const mesas = applyMesaStamp([], 2, 2, false);
+    expect(mesas).toHaveLength(1);
+    expect(mesas[0].targetHeight).toBeCloseTo(1.20, 2);
+
+    // Height at mesa center equals target height 1.20m
+    const mesaH = sampleCompositeTerrainHeight(2, 2, 4208, [], mesas);
+    expect(mesaH).toBeCloseTo(1.20, 2);
+
+    // 2. Build a ramp connecting basin (0, 0, 0.42) to mesa (2, 2, 1.20)
+    const ramps = applyRampSegment([], 0, 0, 0.42, 2, 2, 1.20);
+    expect(ramps).toHaveLength(1);
+
+    // Midpoint of ramp (1, 1) has intermediate grade (0.42 + 1.20) / 2 = 0.81m
+    const midH = sampleCompositeTerrainHeight(1, 1, 4208, [], mesas, ramps);
+    expect(midH).toBeCloseTo(0.81, 1);
+  });
+
+  // Failure Path 3: Invalid mesa and ramp parameters
+  it('throws TypeError / RangeError on invalid mesa stamp and ramp segment parameters', (): void => {
+    expect((): void => {
+      // @ts-expect-error Testing non-boolean isCarve
+      applyMesaStamp([], 0, 0, 'invalid');
+    }).toThrow(TypeError);
+
+    expect((): void => {
+      applyMesaStamp([], 0, 0, false, 1.2, -0.5);
+    }).toThrow(RangeError);
+
+    expect((): void => {
+      // Zero-length ramp throws RangeError
+      applyRampSegment([], 1, 1, 0.42, 1.1, 1.1, 1.2);
+    }).toThrow(RangeError);
+
+    expect((): void => {
+      applyRampSegment([], 0, 0, 0.42, 2, 2, 1.2, -1.0);
     }).toThrow(RangeError);
   });
 });

@@ -37,8 +37,20 @@ const TOOLS: ReadonlyArray<ToolDescriptor> = [
   {
     id: 'sculpt',
     label: 'Sculpt Ground',
-    hint: 'Left-Click to lift ground (+0.08m) • Right-Click to lower ground (-0.08m) (~10% mesa height)',
+    hint: 'Left-Click: lift basin (+0.08m) • Right-Click: lower (-0.08m) — mesas remain locked in place',
     badgeColor: '#b06d3b',
+  },
+  {
+    id: 'mesa',
+    label: 'Build Mesa',
+    hint: 'Left-Click: stamp flat mesa plateau with cliffs (+0.78m) • Right-Click: chisel/carve down to basin',
+    badgeColor: '#964828',
+  },
+  {
+    id: 'ramp',
+    label: 'Incline Ramp',
+    hint: 'Click & drag from basin to mesa rim to build an inclined earthen ramp for tracks',
+    badgeColor: '#c78440',
   },
   {
     id: 'demolish',

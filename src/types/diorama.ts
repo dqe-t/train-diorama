@@ -1,4 +1,4 @@
-export type ToolType = 'track' | 'cottage' | 'station' | 'trees' | 'demolish' | 'sculpt';
+export type ToolType = 'track' | 'cottage' | 'station' | 'trees' | 'demolish' | 'sculpt' | 'mesa' | 'ramp';
 
 export type PropKind = 'saguaro' | 'sagebrush' | 'juniper' | 'boulder' | 'hoodoo' | 'arch';
 
@@ -18,6 +18,26 @@ export interface SculptStamp {
   readonly z: number;
   readonly delta: number;
   readonly radius: number;
+}
+
+export interface MesaStamp {
+  readonly id: string;
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+  readonly targetHeight: number;
+  readonly isCarve: boolean;
+}
+
+export interface RampSegment {
+  readonly id: string;
+  readonly startX: number;
+  readonly startZ: number;
+  readonly startY: number;
+  readonly endX: number;
+  readonly endZ: number;
+  readonly endY: number;
+  readonly width: number;
 }
 
 export interface SplineSample {
@@ -68,4 +88,6 @@ export interface OrganicDioramaWorld {
   readonly naturalProps: ReadonlyArray<NaturalProp>;
   readonly structures: ReadonlyArray<PlacedStructure>;
   readonly sculptStamps: ReadonlyArray<SculptStamp>;
+  readonly mesaStamps: ReadonlyArray<MesaStamp>;
+  readonly rampSegments: ReadonlyArray<RampSegment>;
 }
