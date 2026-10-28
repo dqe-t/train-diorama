@@ -49,9 +49,9 @@
   * **Timber Trestle Bents & Cribbing Piers:** Placed at uniform $\Delta s = 0.52\text{m}$ intervals wherever terrain clearance necessitates substructures.
   * Number of ties scales dynamically with length: $N_{\text{ties}} = \text{round}(L_{\text{total}} / 0.16\text{m})$, guaranteeing identical visual density across any route length.
 
-### 2.6. Photorealistic Diorama Textures
-* **Sedimentary Sandstone Strata (`public/textures/sandstone_strata.jpg`):** High-resolution Utah red rock cliff face texture displaying horizontal geological sedimentation, ochre/terracotta/salmon banding, and micro-fissures applied to the carved museum diorama skirt.
-* **Desert Sand & Arroyo Wash (`public/textures/desert_sand.jpg`):** Top-down seamless sand texture with natural ripples, fine pebbles, and gravel applied as surface color and micro bump map, composited with macro vertex coloring for natural geological variation.
+### 2.6. Procedural Procedural Synthesis & Clay Diorama Aesthetics
+* **Procedural Strata Texture (`textureSynthesis.ts`):** Dynamic sedimentary strata synthesis generating horizontal elevation bands directly mapped to cliff heights and the carved diorama skirt.
+* **Procedural Normal Map (`textureSynthesis.ts`):** Dynamic tangent-space dune ripples and fine sand micro-relief reacting to directional sunlight.
 
 ### 2.7. Physical Based Rendering (PBR), IBL Lighting & Pin-Sharp Orthographic Clarity
 * **Soft "Modelling Clay" Visual Style:** Smooth, matte terracotta clay surfaces (`[0.89, 0.48, 0.25]`) with alternating horizontal sedimentary rock strata bands on cliff slopes (`smoothRange(0.26, 0.75, slope)`), pale sandy dry wash trails, and subtle dune-ripple normal mapping.
