@@ -1,4 +1,4 @@
-export type ToolType = 'track' | 'cottage' | 'station' | 'trees' | 'demolish';
+export type ToolType = 'track' | 'cottage' | 'station' | 'trees' | 'demolish' | 'sculpt';
 
 export type PropKind = 'saguaro' | 'sagebrush' | 'juniper' | 'boulder' | 'hoodoo' | 'arch';
 
@@ -10,6 +10,14 @@ export interface Vec3Point {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+}
+
+export interface SculptStamp {
+  readonly id: string;
+  readonly x: number;
+  readonly z: number;
+  readonly delta: number;
+  readonly radius: number;
 }
 
 export interface SplineSample {
@@ -59,4 +67,5 @@ export interface OrganicDioramaWorld {
   readonly splineSamples: ReadonlyArray<SplineSample>;
   readonly naturalProps: ReadonlyArray<NaturalProp>;
   readonly structures: ReadonlyArray<PlacedStructure>;
+  readonly sculptStamps: ReadonlyArray<SculptStamp>;
 }

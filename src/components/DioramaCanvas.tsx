@@ -21,6 +21,7 @@ const PLINTH_BOTTOM_Y = STRATA_BOTTOM_Y - 0.38;
 export function DioramaCanvas(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
+  const activeTool = useDioramaStore((s): typeof s.activeTool => s.activeTool);
 
   // Warm studio lighting: strong directional sun from high back-left casting diagonal shadows
   const sunColor = goldenHour ? '#ff923a' : '#ffa856';
@@ -31,6 +32,7 @@ export function DioramaCanvas(): React.JSX.Element {
     <Canvas
       shadows
       dpr={[1, 2]}
+      onContextMenu={(e: React.MouseEvent): void => e.preventDefault()}
       gl={{
         toneMapping: ACESFilmicToneMapping,
         toneMappingExposure: goldenHour ? 1.02 : 0.98,
@@ -62,7 +64,7 @@ export function DioramaCanvas(): React.JSX.Element {
         mouseButtons={{
           LEFT: MOUSE.PAN,
           MIDDLE: MOUSE.DOLLY,
-          RIGHT: MOUSE.PAN,
+          RIGHT: activeTool === 'sculpt' ? undefined : MOUSE.PAN,
         }}
       />
 

@@ -1,20 +1,11 @@
-import {
-  OrganicDioramaWorld,
-  PlacedStructure,
-  SplineSample,
-  ToolType,
-  Vec3Point,
-} from '../types/diorama';
-import {
-  hashCoords,
-  sampleNaturalTerrainHeight,
-  TRACK_BED_OFFSET,
-} from './noise';
+import { OrganicDioramaWorld, PlacedStructure, SplineSample, ToolType, Vec3Point } from '../types/diorama';
+import { hashCoords, sampleNaturalTerrainHeight, TRACK_BED_OFFSET } from './noise';
 import { isBuildableSite, scatterDesertProps } from './propScatter';
+import { applySculptStamp } from './terrainSculpt';
 import { buildSplineSamples } from './trackGraph';
 
 const DEFAULT_SPLINE_SAMPLES = 160;
-const VALID_TOOLS: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish'];
+const VALID_TOOLS: ReadonlyArray<ToolType> = ['track', 'cottage', 'station', 'trees', 'demolish', 'sculpt'];
 
 function validateWorld(world: OrganicDioramaWorld): void {
   if (!world || typeof world.span !== 'number') {
@@ -157,6 +148,7 @@ export function createOrganicDiorama(
     splineSamples,
     naturalProps: scatterDesertProps(span, seed, splineSamples, structures),
     structures,
+    sculptStamps: [],
   };
 }
 
@@ -334,6 +326,9 @@ export function applyWorldSpaceTool(
 
   if (tool === 'track') return applyTrackTool(world, worldX, worldZ);
   if (tool === 'demolish') return applyDemolishTool(world, worldX, worldZ);
+  if (tool === 'sculpt') {
+    return { ...world, sculptStamps: applySculptStamp(world.sculptStamps, worldX, worldZ, 'lift') };
+  }
   return applyBuildingTool(world, worldX, worldZ, tool);
 }
 

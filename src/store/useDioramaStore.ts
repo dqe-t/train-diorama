@@ -5,6 +5,7 @@ import {
   createOrganicDiorama,
 } from '../core/dioramaBuilder';
 import { DIORAMA_SPAN } from '../core/noise';
+import { applySculptStamp } from '../core/terrainSculpt';
 import { OrganicDioramaWorld, ToolType, Vec3Point } from '../types/diorama';
 
 const INITIAL_SEED = 4208;
@@ -20,6 +21,7 @@ export interface DioramaStoreState {
   setHoverPoint: (pt: Vec3Point | null) => void;
   setPointerDragging: (dragging: boolean) => void;
   interactAtWorldPoint: (worldX: number, worldZ: number) => void;
+  sculptGroundAtPoint: (worldX: number, worldZ: number, direction: 'lift' | 'lower') => void;
   clearTracks: () => void;
   regenerateLandscape: (withStarterLoop: boolean) => void;
   toggleTrainRunning: () => void;
@@ -54,10 +56,35 @@ export const useDioramaStore = create<DioramaStoreState>((set, get): DioramaStor
 
   interactAtWorldPoint: (worldX: number, worldZ: number): void => {
     const state = get();
+    if (state.activeTool === 'sculpt') {
+      state.sculptGroundAtPoint(worldX, worldZ, 'lift');
+      return;
+    }
     const updatedWorld = applyWorldSpaceTool(state.world, worldX, worldZ, state.activeTool);
     if (updatedWorld !== state.world) {
       set({ world: updatedWorld });
     }
+  },
+
+  sculptGroundAtPoint: (worldX: number, worldZ: number, direction: 'lift' | 'lower'): void => {
+    if (!Number.isFinite(worldX) || !Number.isFinite(worldZ)) {
+      throw new TypeError('CRITICAL: worldX and worldZ must be finite numbers.');
+    }
+    if (direction !== 'lift' && direction !== 'lower') {
+      throw new TypeError('CRITICAL: direction must be "lift" or "lower".');
+    }
+    const state = get();
+    const half = state.world.span * 0.5;
+    if (Math.abs(worldX) > half || Math.abs(worldZ) > half) {
+      return;
+    }
+    const updatedStamps = applySculptStamp(state.world.sculptStamps, worldX, worldZ, direction);
+    set({
+      world: {
+        ...state.world,
+        sculptStamps: updatedStamps,
+      },
+    });
   },
 
   clearTracks: (): void => {

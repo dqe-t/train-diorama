@@ -35,6 +35,12 @@ const TOOLS: ReadonlyArray<ToolDescriptor> = [
     badgeColor: '#5d7f46',
   },
   {
+    id: 'sculpt',
+    label: 'Sculpt Ground',
+    hint: 'Left-Click to lift ground (+0.08m) • Right-Click to lower ground (-0.08m) (~10% mesa height)',
+    badgeColor: '#b06d3b',
+  },
+  {
     id: 'demolish',
     label: 'Erase',
     hint: 'Click or drag to remove rail points or buildings near the cursor',

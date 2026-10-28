@@ -21,9 +21,11 @@ import {
   STRATA_BOTTOM_Y,
   STRATA_TOP_Y,
 } from '../core/desertPalette';
-import { sampleNaturalTerrainHeight, sampleWashFactor, valueNoise2D } from '../core/noise';
+import { sampleWashFactor, valueNoise2D } from '../core/noise';
+import { sampleCompositeTerrainHeight } from '../core/terrainSculpt';
 import { generateSandNormalPixels, generateStrataPixels } from '../core/textureSynthesis';
 import { useDioramaStore } from '../store/useDioramaStore';
+import { SculptStamp } from '../types/diorama';
 import { DesertPropItem } from './DesertFlora';
 
 const MESH_SEGMENTS = 192;
@@ -38,7 +40,11 @@ interface TerrainGeometries {
   readonly skirtGeo: BufferGeometry;
 }
 
-function buildSculptedTerrainGeometry(span: number, seed: number): TerrainGeometries {
+function buildSculptedTerrainGeometry(
+  span: number,
+  seed: number,
+  sculptStamps: ReadonlyArray<SculptStamp>
+): TerrainGeometries {
   const half = span * 0.5;
   const step = span / MESH_SEGMENTS;
   const vertsPerRow = MESH_SEGMENTS + 1;
@@ -48,7 +54,9 @@ function buildSculptedTerrainGeometry(span: number, seed: number): TerrainGeomet
   for (let iz = 0; iz <= MESH_SEGMENTS; iz += 1) {
     const row: number[] = [];
     for (let ix = 0; ix <= MESH_SEGMENTS; ix += 1) {
-      row.push(sampleNaturalTerrainHeight(-half + ix * step, -half + iz * step, seed));
+      row.push(
+        sampleCompositeTerrainHeight(-half + ix * step, -half + iz * step, seed, sculptStamps)
+      );
     }
     heights.push(row);
   }
@@ -184,10 +192,14 @@ export function DioramaTerrain(): React.JSX.Element {
   const interactAtWorldPoint = useDioramaStore(
     (s): typeof s.interactAtWorldPoint => s.interactAtWorldPoint
   );
+  const sculptGroundAtPoint = useDioramaStore(
+    (s): typeof s.sculptGroundAtPoint => s.sculptGroundAtPoint
+  );
 
   const geometries = useMemo(
-    (): TerrainGeometries => buildSculptedTerrainGeometry(world.span, world.seed),
-    [world.span, world.seed]
+    (): TerrainGeometries =>
+      buildSculptedTerrainGeometry(world.span, world.seed, world.sculptStamps),
+    [world.span, world.seed, world.sculptStamps]
   );
   const rippleTexture = useMemo(
     (): DataTexture => createRippleNormalTexture(world.seed),
@@ -208,6 +220,14 @@ export function DioramaTerrain(): React.JSX.Element {
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>): void => {
     e.stopPropagation();
+    if (activeTool === 'sculpt') {
+      if (e.button === 0) {
+        sculptGroundAtPoint(e.point.x, e.point.z, 'lift');
+      } else if (e.button === 2) {
+        sculptGroundAtPoint(e.point.x, e.point.z, 'lower');
+      }
+      return;
+    }
     if (e.button !== 0) {
       return;
     }
