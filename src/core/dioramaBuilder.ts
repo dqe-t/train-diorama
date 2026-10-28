@@ -91,6 +91,29 @@ function buildStarterStructures(
       colorVariant: idx,
     });
   });
+
+  structures.push({
+    id: 'starter-watertower-village',
+    kind: 'watertower',
+    x: -0.85,
+    y: sampleNaturalTerrainHeight(-0.85, 0.4, seed),
+    z: 0.4,
+    rotationY: 0.3,
+    stories: 1,
+    colorVariant: 0,
+  });
+
+  structures.push({
+    id: 'starter-footbridge-wash',
+    kind: 'footbridge',
+    x: 2.1,
+    y: sampleNaturalTerrainHeight(2.1, 1.8, seed),
+    z: 1.8,
+    rotationY: 0.75,
+    stories: 1,
+    colorVariant: 0,
+  });
+
   return structures;
 }
 
@@ -111,14 +134,15 @@ export function createOrganicDiorama(
 
   const trackPoints: Vec3Point[] = [];
   if (withStarterTrack) {
-    // Wide, graceful model railroad loop centered in the open desert valley
+    // Wide elevated model railroad viaduct loop centered in the diorama
     const nodes = 16;
     for (let i = 0; i < nodes; i += 1) {
       const theta = (i / nodes) * Math.PI * 2;
-      const r = 4.1 + Math.cos(2 * theta) * 0.35;
-      const wx = 0.3 + Math.sin(theta) * (r + 0.2);
-      const wz = 0.3 + Math.cos(theta) * (r - 0.2);
-      trackPoints.push({ x: wx, y: computeTrackPointY(wx, wz, seed), z: wz });
+      const r = 4.6 + Math.cos(2 * theta) * 0.25;
+      const wx = Math.sin(theta) * r;
+      const wz = Math.cos(theta) * r;
+      const targetY = Math.max(1.32, sampleNaturalTerrainHeight(wx, wz, seed) + TRACK_BED_OFFSET);
+      trackPoints.push({ x: wx, y: targetY, z: wz });
     }
   }
 

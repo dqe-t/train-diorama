@@ -169,6 +169,61 @@ function CactusPatch({ item }: StructureItemProps): React.JSX.Element {
   );
 }
 
+function StandaloneWaterTower({ item }: StructureItemProps): React.JSX.Element {
+  return (
+    <group position={[item.x, item.y, item.z]} rotation={[0, item.rotationY, 0]}>
+      {[
+        [-0.1, -0.1],
+        [0.1, -0.1],
+        [-0.1, 0.1],
+        [0.1, 0.1],
+      ].map(([lx, lz], idx): React.JSX.Element => (
+        <mesh key={idx} position={[lx, 0.24, lz]} castShadow>
+          <boxGeometry args={[0.024, 0.48, 0.024]} />
+          <meshStandardMaterial color={TIMBER} roughness={0.9} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.6, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.16, 0.16, 0.25, 12]} />
+        <meshStandardMaterial color={TIMBER} roughness={0.88} />
+      </mesh>
+      <mesh position={[0, 0.79, 0]} castShadow>
+        <coneGeometry args={[0.19, 0.15, 12]} />
+        <meshStandardMaterial color={TIMBER_DARK} roughness={0.85} />
+      </mesh>
+      <mesh position={[0.18, 0.55, 0]} rotation={[0, 0, -0.9]} castShadow>
+        <cylinderGeometry args={[0.014, 0.014, 0.2, 5]} />
+        <meshStandardMaterial color="#3a3a3a" roughness={0.6} metalness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+function ArchedFootbridge({ item }: StructureItemProps): React.JSX.Element {
+  return (
+    <group position={[item.x, item.y, item.z]} rotation={[0, item.rotationY, 0]}>
+      <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.7, 0.035, 0.24]} />
+        <meshStandardMaterial color={TIMBER} roughness={0.9} />
+      </mesh>
+      {[-0.11, 0.11].map((zSide): React.JSX.Element => (
+        <group key={zSide} position={[0, 0.16, zSide]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.72, 0.02, 0.02]} />
+            <meshStandardMaterial color={TIMBER_DARK} roughness={0.9} />
+          </mesh>
+          {[-0.3, -0.1, 0.1, 0.3].map((xPost): React.JSX.Element => (
+            <mesh key={xPost} position={[xPost, -0.05, 0]} castShadow>
+              <boxGeometry args={[0.02, 0.12, 0.02]} />
+              <meshStandardMaterial color={TIMBER_DARK} roughness={0.9} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 export function DioramaStructures(): React.JSX.Element {
   const world = useDioramaStore((s): typeof s.world => s.world);
   const hoverPoint = useDioramaStore((s): typeof s.hoverPoint => s.hoverPoint);
@@ -181,6 +236,12 @@ export function DioramaStructures(): React.JSX.Element {
         }
         if (item.kind === 'station') {
           return <FrontierDepot key={item.id} item={item} />;
+        }
+        if (item.kind === 'watertower') {
+          return <StandaloneWaterTower key={item.id} item={item} />;
+        }
+        if (item.kind === 'footbridge') {
+          return <ArchedFootbridge key={item.id} item={item} />;
         }
         return <CactusPatch key={item.id} item={item} />;
       })}

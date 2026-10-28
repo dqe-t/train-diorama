@@ -22,6 +22,7 @@ export function MiniatureTrain(): React.JSX.Element | null {
   const tenderRef = useRef<Group>(null);
   const coach1Ref = useRef<Group>(null);
   const coach2Ref = useRef<Group>(null);
+  const coach3Ref = useRef<Group>(null);
   const puffGroupRef = useRef<Group>(null);
   const spotTargetRef = useRef<Object3D>(new Object3D());
 
@@ -40,7 +41,8 @@ export function MiniatureTrain(): React.JSX.Element | null {
       !locoRef.current ||
       !tenderRef.current ||
       !coach1Ref.current ||
-      !coach2Ref.current
+      !coach2Ref.current ||
+      !coach3Ref.current
     ) {
       return;
     }
@@ -78,6 +80,7 @@ export function MiniatureTrain(): React.JSX.Element | null {
     applyCarriagePose(tenderRef, 0.015 * sign);
     applyCarriagePose(coach1Ref, 0.032 * sign);
     applyCarriagePose(coach2Ref, 0.051 * sign);
+    applyCarriagePose(coach3Ref, 0.070 * sign);
 
     // Emit soft white steam puffs from the locomotive smokestack
     const locoPose = sampleTrainPoseAlongSpline(samples, distanceRef.current);
@@ -179,23 +182,23 @@ export function MiniatureTrain(): React.JSX.Element | null {
         </mesh>
       </group>
 
-      {/* First Passenger Coach */}
+      {/* Blue Freight Boxcar */}
       <group ref={coach1Ref}>
         <mesh position={[0, 0.04, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.045, 0.36]} />
+          <boxGeometry args={[0.2, 0.045, 0.34]} />
           <meshStandardMaterial color="#1a1c1e" roughness={0.7} metalness={0.5} />
         </mesh>
         <mesh position={[0, 0.13, 0]} castShadow>
-          <boxGeometry args={[0.19, 0.14, 0.33]} />
-          <meshStandardMaterial color="#3c6b94" roughness={0.5} metalness={0.25} envMapIntensity={1.1} />
+          <boxGeometry args={[0.19, 0.14, 0.31]} />
+          <meshStandardMaterial color="#2d72b2" roughness={0.5} metalness={0.25} envMapIntensity={1.2} />
         </mesh>
         <mesh position={[0, 0.21, 0]} castShadow>
-          <boxGeometry args={[0.21, 0.03, 0.35]} />
+          <boxGeometry args={[0.21, 0.025, 0.33]} />
           <meshStandardMaterial color="#ece3cc" roughness={0.6} />
         </mesh>
       </group>
 
-      {/* Second Passenger Coach */}
+      {/* Cream White Passenger Coach */}
       <group ref={coach2Ref}>
         <mesh position={[0, 0.04, 0]} castShadow>
           <boxGeometry args={[0.2, 0.045, 0.36]} />
@@ -203,11 +206,31 @@ export function MiniatureTrain(): React.JSX.Element | null {
         </mesh>
         <mesh position={[0, 0.13, 0]} castShadow>
           <boxGeometry args={[0.19, 0.14, 0.33]} />
-          <meshStandardMaterial color="#477a56" roughness={0.5} metalness={0.25} envMapIntensity={1.1} />
+          <meshStandardMaterial color="#ece3cc" roughness={0.55} envMapIntensity={1.0} />
         </mesh>
         <mesh position={[0, 0.21, 0]} castShadow>
-          <boxGeometry args={[0.21, 0.03, 0.35]} />
+          <boxGeometry args={[0.21, 0.025, 0.35]} />
+          <meshStandardMaterial color="#b27f54" roughness={0.65} />
+        </mesh>
+      </group>
+
+      {/* Green Caboose */}
+      <group ref={coach3Ref}>
+        <mesh position={[0, 0.04, 0]} castShadow>
+          <boxGeometry args={[0.2, 0.045, 0.34]} />
+          <meshStandardMaterial color="#1a1c1e" roughness={0.7} metalness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.13, 0]} castShadow>
+          <boxGeometry args={[0.19, 0.14, 0.31]} />
+          <meshStandardMaterial color="#3f7e52" roughness={0.5} metalness={0.25} envMapIntensity={1.1} />
+        </mesh>
+        <mesh position={[0, 0.21, 0]} castShadow>
+          <boxGeometry args={[0.21, 0.025, 0.33]} />
           <meshStandardMaterial color="#ece3cc" roughness={0.6} />
+        </mesh>
+        <mesh position={[0, 0.25, -0.02]} castShadow>
+          <boxGeometry args={[0.14, 0.06, 0.12]} />
+          <meshStandardMaterial color="#3f7e52" roughness={0.5} />
         </mesh>
       </group>
 

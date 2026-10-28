@@ -18,23 +18,23 @@ interface StrataLayer {
  */
 /** Rich terracotta and sedimentary rock strata (bottom → top) with distinct horizontal banding. */
 const STRATA_LAYERS: ReadonlyArray<StrataLayer> = [
-  { top: -0.2, color: [0.44, 0.17, 0.09] },
-  { top: 0.15, color: [0.58, 0.24, 0.13] },
-  { top: 0.40, color: [0.72, 0.33, 0.18] },
-  { top: 0.65, color: [0.50, 0.20, 0.11] },
-  { top: 0.90, color: [0.76, 0.37, 0.20] },
-  { top: 1.15, color: [0.56, 0.23, 0.13] },
-  { top: 1.45, color: [0.80, 0.41, 0.22] },
-  { top: 1.75, color: [0.64, 0.28, 0.15] },
-  { top: 2.05, color: [0.84, 0.46, 0.25] },
-  { top: Number.POSITIVE_INFINITY, color: [0.89, 0.54, 0.31] },
+  { top: -0.2, color: [0.42, 0.16, 0.08] },
+  { top: 0.15, color: [0.56, 0.22, 0.12] },
+  { top: 0.40, color: [0.70, 0.31, 0.17] },
+  { top: 0.65, color: [0.48, 0.18, 0.10] },
+  { top: 0.90, color: [0.75, 0.35, 0.19] },
+  { top: 1.15, color: [0.54, 0.21, 0.11] },
+  { top: 1.45, color: [0.78, 0.39, 0.21] },
+  { top: 1.75, color: [0.62, 0.26, 0.14] },
+  { top: 2.05, color: [0.82, 0.44, 0.24] },
+  { top: Number.POSITIVE_INFINITY, color: [0.90, 0.54, 0.31] },
 ];
 
-const DESERT_FLOOR: Rgb = [0.89, 0.48, 0.25];
-const PLATEAU_TOP: Rgb = [0.86, 0.44, 0.22];
-const CAP_TOP: Rgb = [0.90, 0.53, 0.29];
-const WASH_SAND: Rgb = [0.93, 0.65, 0.41];
-const WASH_PEBBLE: Rgb = [0.85, 0.55, 0.35];
+const DESERT_FLOOR: Rgb = [0.91, 0.46, 0.22];
+const PLATEAU_TOP: Rgb = [0.88, 0.42, 0.20];
+const CAP_TOP: Rgb = [0.93, 0.54, 0.28];
+const WASH_SAND: Rgb = [0.91, 0.60, 0.35];
+const WASH_PEBBLE: Rgb = [0.82, 0.48, 0.28];
 
 export interface TerrainColorInput {
   readonly height: number;

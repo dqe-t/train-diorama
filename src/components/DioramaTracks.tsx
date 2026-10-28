@@ -229,13 +229,6 @@ export function DioramaTracks(): React.JSX.Element | null {
 
   return (
     <group>
-      {world.trackPoints.map((pt, idx): React.JSX.Element => (
-        <mesh key={`node-${idx}`} position={[pt.x, pt.y + 0.06, pt.z]}>
-          <sphereGeometry args={[0.045, 8, 8]} />
-          <meshStandardMaterial color="#f5d76e" roughness={0.5} />
-        </mesh>
-      ))}
-
       {trackData !== null && (
         <>
           <mesh geometry={trackData.ballastGeo} receiveShadow castShadow>

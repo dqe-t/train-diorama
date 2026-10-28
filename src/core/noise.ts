@@ -140,8 +140,12 @@ export function sampleNaturalTerrainHeight(worldX: number, worldZ: number, seed:
   validateFinite(worldZ, 'worldZ');
   validateFinite(seed, 'seed');
 
-  // Flat desert floor with very gentle dune undulation
-  let height = PLAIN_Y + (valueNoise2D(worldX * 0.6, worldZ * 0.6, seed + 7) - 0.5) * 0.05;
+  // Tactile polymer-clay dune ridges: soft, rhythmic wind-blown sand crests
+  const warpDune = (valueNoise2D(worldX * 0.4, worldZ * 0.4, seed + 11) - 0.5) * 1.8;
+  const duneWave1 = Math.sin((worldX * 1.45 + worldZ * 0.95) + warpDune) * 0.048;
+  const duneWave2 = Math.cos((worldX * 0.85 - worldZ * 1.25) + warpDune * 0.6) * 0.026;
+  const gentleRoll = (valueNoise2D(worldX * 0.5, worldZ * 0.5, seed + 7) - 0.5) * 0.04;
+  let height = PLAIN_Y + duneWave1 + duneWave2 + gentleRoll;
 
   const mask = sampleMesaMask(worldX, worldZ, seed);
 

@@ -4,10 +4,11 @@ import { DioramaCanvas } from './components/DioramaCanvas';
 import { HudToolbar } from './components/HudToolbar';
 
 function App(): React.JSX.Element {
+  const showHud = !new URLSearchParams(window.location.search).has('clean');
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <DioramaCanvas />
-      <HudToolbar />
+      {showHud && <HudToolbar />}
     </div>
   );
 }

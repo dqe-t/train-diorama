@@ -23,9 +23,9 @@ export function DioramaCanvas(): React.JSX.Element {
   const goldenHour = useDioramaStore((s): boolean => s.goldenHour);
 
   // Warm studio lighting: strong directional sun from high back-left casting diagonal shadows
-  const sunColor = goldenHour ? '#ffa24d' : '#ffe2c2';
-  const skyColor = goldenHour ? '#ffd0a8' : '#ffe4cf';
-  const groundBounce = goldenHour ? '#84280c' : '#8c3514';
+  const sunColor = goldenHour ? '#ff923a' : '#ffa856';
+  const skyColor = goldenHour ? '#ffa872' : '#ffc498';
+  const groundBounce = goldenHour ? '#782208' : '#882e10';
 
   return (
     <Canvas
@@ -33,17 +33,20 @@ export function DioramaCanvas(): React.JSX.Element {
       dpr={[1, 2]}
       gl={{
         toneMapping: ACESFilmicToneMapping,
-        toneMappingExposure: goldenHour ? 1.08 : 1.04,
+        toneMappingExposure: goldenHour ? 1.02 : 0.98,
       }}
     >
+      {/* Dark studio tabletop presentation background */}
+      <color attach="background" args={['#1e1c22']} />
+
       {/* Percentage-closer soft shadows: crisp contact grounding with gentle penumbra */}
-      <SoftShadows size={6} samples={16} focus={0.5} />
+      <SoftShadows size={5} samples={16} focus={0.5} />
 
       {/* Strictly Fixed Isometric Orthographic Camera */}
       <OrthographicCamera
         makeDefault
         position={[22, 22, 22]}
-        zoom={44}
+        zoom={45}
         near={-60}
         far={140}
       />
@@ -64,14 +67,14 @@ export function DioramaCanvas(): React.JSX.Element {
       />
 
       {/* Subtle desert environment reflections */}
-      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.35 : 0.25} />
+      <Environment preset="sunset" environmentIntensity={goldenHour ? 0.25 : 0.18} />
 
-      <ambientLight intensity={goldenHour ? 0.16 : 0.18} color={skyColor} />
-      <hemisphereLight args={[skyColor, groundBounce, 0.35]} />
+      <ambientLight intensity={goldenHour ? 0.12 : 0.14} color={skyColor} />
+      <hemisphereLight args={[skyColor, groundBounce, 0.25]} />
       <directionalLight
         castShadow
-        position={goldenHour ? [-15, 18, 16] : [-16, 22, 20]}
-        intensity={goldenHour ? 3.2 : 3.0}
+        position={goldenHour ? [-15, 20, 16] : [-16, 24, 18]}
+        intensity={goldenHour ? 3.4 : 3.2}
         color={sunColor}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -84,10 +87,10 @@ export function DioramaCanvas(): React.JSX.Element {
         shadow-bias={-0.0004}
         shadow-normalBias={0.025}
       />
-      {/* Warm ambient bounce from front-right to lift deep cliff crevices */}
-      <directionalLight position={[14, 8, 12]} intensity={0.4} color="#ffb080" />
+      {/* Very faint fill light to keep darkest shadowed crevices readable */}
+      <directionalLight position={[14, 8, 12]} intensity={0.12} color="#ffb080" />
 
-      <group position={[0, -0.3, 0]}>
+      <group position={[0, 0, 0]}>
         {/* Soft ambient contact shadow beneath the plinth */}
         <ContactShadows
           position={[0, PLINTH_BOTTOM_Y - 0.005, 0]}
@@ -98,10 +101,10 @@ export function DioramaCanvas(): React.JSX.Element {
           color="#0d0806"
         />
 
-        {/* Dark studio tabletop */}
+        {/* Dark studio tabletop with soft shadow catching */}
         <mesh position={[0, PLINTH_BOTTOM_Y - 0.01, 0]} rotation={[-Math.PI * 0.5, 0, 0]} receiveShadow>
           <planeGeometry args={[world.span * 3.5, world.span * 3.5]} />
-          <meshStandardMaterial color="#18181a" roughness={0.85} metalness={0} />
+          <shadowMaterial opacity={0.62} />
         </mesh>
 
         <DioramaTerrain />
